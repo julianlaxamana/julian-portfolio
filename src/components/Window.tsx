@@ -1,4 +1,4 @@
-import { useState, type ReactNode, type RefObject } from 'react'
+import { useState, type ReactNode } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import './Window.css'
 
@@ -8,7 +8,44 @@ const CLOSE_TRANSITION = { duration: 0.18, ease: [0.4, 0, 1, 1] as const }
 const OPEN_TRANSITION = { duration: 0.22, ease: [0, 0, 0.2, 1] as const }
 const SNAP_TRANSITION = { duration: 0.24, ease: [0.16, 1, 0.3, 1] as const }
 
+// Mirrors .window / .window__titlebar / .window__controls / .window__button
+// in Window.css. Kept in sync manually — used to place click targets that
+// compensate for the CRT warp filter (see getWindowControlCenters below).
+const WINDOW_BORDER_WIDTH = 2
+const CONTROLS_PADDING_RIGHT = 4
+const CONTROLS_GAP = 4
+const BUTTON_WIDTH = 28
+const BUTTON_HEIGHT = 26
+
 export type WindowRect = { x: number; y: number; width: number; height: number }
+export type Point = { x: number; y: number }
+
+// The CRT warp filter on the windows layer bends what's drawn without moving
+// the underlying DOM boxes, so native click hit-testing lands where the
+// button *would* be unwarped, not where it's actually rendered. CrtScreen
+// uses these flat centers (run through the same inverseWarp it uses for the
+// taskbar) to place invisible, correctly-positioned click targets on top.
+// `rect` is the window's content-box rect (x/y are the border-box position,
+// width/height are the CSS `width`/`height` values, i.e. content-box size),
+// matching the WindowRect passed to <Window rect=.../>.
+export function getWindowControlCenters(rect: WindowRect): {
+  minimize: Point
+  maximize: Point
+  close: Point
+} {
+  const y = rect.y + TITLEBAR_HEIGHT / 2
+  const contentRight = rect.x + WINDOW_BORDER_WIDTH + rect.width
+  const closeX = contentRight - CONTROLS_PADDING_RIGHT - BUTTON_WIDTH / 2
+  const maximizeX = closeX - (BUTTON_WIDTH + CONTROLS_GAP)
+  const minimizeX = maximizeX - (BUTTON_WIDTH + CONTROLS_GAP)
+  return {
+    minimize: { x: minimizeX, y },
+    maximize: { x: maximizeX, y },
+    close: { x: closeX, y },
+  }
+}
+
+export const WINDOW_BUTTON_SIZE = { width: BUTTON_WIDTH, height: BUTTON_HEIGHT }
 
 type WindowProps = {
   title: string
@@ -21,7 +58,6 @@ type WindowProps = {
   rect: WindowRect
   maximizedRect: WindowRect
   minimizeTarget?: { x: number; y: number }
-  containerRef: RefObject<HTMLElement | null>
   onClose: () => void
   onMinimize: () => void
   onToggleMaximize: () => void
@@ -40,7 +76,6 @@ export default function Window({
   rect,
   maximizedRect,
   minimizeTarget,
-  containerRef,
   onClose,
   onMinimize,
   onToggleMaximize,
@@ -81,7 +116,6 @@ export default function Window({
           drag={!isMaximized && !isMinimized}
           dragMomentum={false}
           dragElastic={0}
-          dragConstraints={containerRef}
           onPointerDown={onFocus}
           onDragStart={() => setIsDragging(true)}
           onDragEnd={(_, info) => {

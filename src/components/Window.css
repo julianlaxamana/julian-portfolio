@@ -58,13 +58,13 @@
 .window__controls {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
   flex: 0 0 auto;
 }
 
 .window__button {
-  width: 20px;
-  height: 19px;
+  width: 28px;
+  height: 26px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -78,8 +78,8 @@
 }
 
 .window__button svg {
-  width: 9px;
-  height: 9px;
+  width: 12px;
+  height: 12px;
   fill: currentColor;
 }
 

@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import CrtShaderCanvas from './CrtShaderCanvas'
-import Window, { type WindowRect } from './Window'
+import Window, { getWindowControlCenters, WINDOW_BUTTON_SIZE, type Point, type WindowRect } from './Window'
+import DesktopIcon, { type IconPosition } from './DesktopIcon'
 import './CrtScreen.css'
 
 const FONT_SIZE = 28
@@ -39,12 +40,14 @@ const TOOLTIP_HEIGHT = 24
 const TOOLTIP_PADDING_X = 10
 
 type WindowKey = 'about' | 'projects' | 'contact'
+type DesktopIconKey = 'about' | 'projects'
 
 type WindowInstanceState = {
   open: boolean
   minimized: boolean
   maximized: boolean
   rect: WindowRect
+  restoreRect?: WindowRect
   z: number
 }
 
@@ -135,6 +138,42 @@ function inverseWarp(
   let y = targetY
   for (let i = 0; i < 8; i++) {
     const [fx, fy] = forwardWarp(x, y, aspect, strength)
+    x -= fx - targetX
+    y -= fy - targetY
+  }
+  return [x, y]
+}
+
+// buildWarpDisplacementMap (below) encodes each axis as `128 + (dPx/scale) *
+// 127`. feDisplacementMap decodes a channel as `scale * (color/255 - 0.5)`,
+// whose zero point is 127.5, not 128 — so the displacement it actually
+// applies comes out to `dPx * (127/255)`, roughly half of the true
+// forwardWarp offset. The windows layer's *visual* bend is this weaker,
+// already-rendered warp, not the full-strength one, so hit targets placed on
+// top (see getWindowControlCenters/windowControlHits) need to solve for the
+// same weakened mapping or they overshoot past the real button position.
+const WARP_RENDER_FACTOR = 127 / 255
+
+function renderedForwardWarp(
+  x: number,
+  y: number,
+  aspect: number,
+  strength: number,
+): [number, number] {
+  const [fx, fy] = forwardWarp(x, y, aspect, strength)
+  return [x + (fx - x) * WARP_RENDER_FACTOR, y + (fy - y) * WARP_RENDER_FACTOR]
+}
+
+function renderedInverseWarp(
+  targetX: number,
+  targetY: number,
+  aspect: number,
+  strength: number,
+): [number, number] {
+  let x = targetX
+  let y = targetY
+  for (let i = 0; i < 8; i++) {
+    const [fx, fy] = renderedForwardWarp(x, y, aspect, strength)
     x -= fx - targetX
     y -= fy - targetY
   }
@@ -344,6 +383,52 @@ const TASKBAR_ICON_DRAWERS: Record<
   projects: drawProjectsIcon,
 }
 
+function AboutIconGlyph() {
+  return (
+    <svg viewBox="0 0 100 100" aria-hidden="true">
+      <circle cx="50" cy="34" r="17" fill="#f2b705" />
+      <path d="M24 86 Q24 56 50 56 Q76 56 76 86 Z" fill="#f2b705" />
+    </svg>
+  )
+}
+
+function ProjectsIconGlyph() {
+  return (
+    <svg viewBox="0 0 100 100" aria-hidden="true">
+      <rect x="13" y="26" width="33" height="10" fill="#f2b705" />
+      <rect x="13" y="34" width="74" height="50" fill="#ffce3d" stroke="#8a6d1a" strokeWidth="1" />
+    </svg>
+  )
+}
+
+const DESKTOP_ICON_CONFIG: { key: DesktopIconKey; label: string }[] = [
+  { key: 'about', label: 'About.txt' },
+  { key: 'projects', label: 'Projects' },
+]
+
+const DESKTOP_ICON_GLYPHS: Record<DesktopIconKey, () => JSX.Element> = {
+  about: AboutIconGlyph,
+  projects: ProjectsIconGlyph,
+}
+
+const DESKTOP_ICON_GAP_Y = 104
+const DEFAULT_ICON_POSITIONS: Record<DesktopIconKey, IconPosition> = {
+  about: { x: 24, y: 24 },
+  projects: { x: 24, y: 24 + DESKTOP_ICON_GAP_Y },
+}
+
+const ICON_GRID_ORIGIN: IconPosition = { x: 24, y: 24 }
+const ICON_GRID_CELL = { width: 100, height: DESKTOP_ICON_GAP_Y }
+
+function snapToIconGrid(pos: IconPosition): IconPosition {
+  const col = Math.max(0, Math.round((pos.x - ICON_GRID_ORIGIN.x) / ICON_GRID_CELL.width))
+  const row = Math.max(0, Math.round((pos.y - ICON_GRID_ORIGIN.y) / ICON_GRID_CELL.height))
+  return {
+    x: ICON_GRID_ORIGIN.x + col * ICON_GRID_CELL.width,
+    y: ICON_GRID_ORIGIN.y + row * ICON_GRID_CELL.height,
+  }
+}
+
 function drawIconTooltip(
   ctx: CanvasRenderingContext2D,
   iconCenterX: number,
@@ -385,6 +470,9 @@ export default function CrtScreen() {
   const [hoveredTaskbarIcon, setHoveredTaskbarIcon] = useState<string | null>(null)
   const [screenRect, setScreenRect] = useState({ width: 0, height: 0, left: 0, top: 0 })
   const [windows, setWindows] = useState<Record<WindowKey, WindowInstanceState>>(createInitialWindowStates)
+  const [iconPositions, setIconPositions] =
+    useState<Record<DesktopIconKey, IconPosition>>(DEFAULT_ICON_POSITIONS)
+  const [selectedIcon, setSelectedIcon] = useState<DesktopIconKey | null>(null)
   const windowZRef = useRef(0)
   const bootPhaseRef = useRef(bootPhase)
   const screenPhaseRef = useRef(screenPhase)
@@ -613,16 +701,54 @@ export default function CrtScreen() {
   )
 
   const closeWindow = useCallback((key: WindowKey) => {
-    setWindows((prev) => ({ ...prev, [key]: { ...prev[key], open: false, minimized: false } }))
+    setWindows((prev) => {
+      const win = prev[key]
+      return {
+        ...prev,
+        [key]: {
+          ...win,
+          open: false,
+          minimized: false,
+          maximized: false,
+          rect: win.restoreRect ?? win.rect,
+          restoreRect: undefined,
+        },
+      }
+    })
   }, [])
 
   const minimizeWindow = useCallback((key: WindowKey) => {
     setWindows((prev) => ({ ...prev, [key]: { ...prev[key], minimized: true } }))
   }, [])
 
-  const toggleMaximizeWindow = useCallback((key: WindowKey) => {
-    setWindows((prev) => ({ ...prev, [key]: { ...prev[key], maximized: !prev[key].maximized } }))
-  }, [])
+  const toggleMaximizeWindow = useCallback(
+    (key: WindowKey) => {
+      setWindows((prev) => {
+        const win = prev[key]
+        if (win.maximized) {
+          return {
+            ...prev,
+            [key]: { ...win, maximized: false, rect: win.restoreRect ?? win.rect, restoreRect: undefined },
+          }
+        }
+        if (screenRect.width <= 0 || screenRect.height <= 0) {
+          return { ...prev, [key]: { ...win, maximized: true } }
+        }
+        const aspect = screenRect.width / screenRect.height
+        const { safeRect } = buildCrtPath(screenRect.width, screenRect.height, aspect, DESKTOP_STRENGTH)
+        return {
+          ...prev,
+          [key]: {
+            ...win,
+            maximized: true,
+            restoreRect: win.rect,
+            rect: { ...win.rect, x: safeRect.x, y: safeRect.y },
+          },
+        }
+      })
+    },
+    [screenRect],
+  )
 
   const updateWindowRect = useCallback((key: WindowKey, rect: Partial<WindowRect>) => {
     setWindows((prev) => ({ ...prev, [key]: { ...prev[key], rect: { ...prev[key].rect, ...rect } } }))
@@ -992,12 +1118,61 @@ export default function CrtScreen() {
     [hasRect, screenPhase, screenRect.width, screenRect.height],
   )
 
+  const windowRenderData = (Object.keys(windows) as WindowKey[]).map((key) => {
+    const win = windows[key]
+    const iconHit = taskbarIconHits.find((icon) => icon.key === key)
+    const minimizeTarget = iconHit
+      ? { x: iconHit.x - screenRect.left, y: iconHit.y - screenRect.top }
+      : { x: startHitPos.x - screenRect.left, y: startHitPos.y - screenRect.top }
+    const safeRect = crtGeometry?.safeRect ?? { x: 0, y: 0, width: screenRect.width, height: screenRect.height }
+    const maximizedRect: WindowRect = {
+      x: safeRect.x,
+      y: safeRect.y,
+      width: safeRect.width,
+      height: Math.max(0, Math.min(safeRect.height, screenRect.height - TASKBAR_HEIGHT - safeRect.y)),
+    }
+    return { key, win, minimizeTarget, maximizedRect }
+  })
+
+  // The CRT warp filter on the windows layer only bends what's painted, not
+  // the underlying DOM boxes, so native clicks on the titlebar buttons land
+  // where they'd be unwarped rather than where they're actually drawn. These
+  // invisible, correctly-positioned buttons (rendered outside the filtered
+  // layer, same trick as the taskbar hit targets above) fix that.
+  const windowControlHits = hasRect
+    ? windowRenderData
+        .filter(({ win }) => win.open && !win.minimized)
+        .map(({ key, win, maximizedRect }) => {
+          const activeRect = win.maximized ? maximizedRect : win.rect
+          const centers = getWindowControlCenters(activeRect)
+          const aspect = screenRect.width / screenRect.height
+          const warpToScreen = (p: Point): Point => {
+            const [wu, wv] = renderedInverseWarp(
+              p.x / screenRect.width,
+              p.y / screenRect.height,
+              aspect,
+              DESKTOP_STRENGTH,
+            )
+            return { x: screenRect.left + wu * screenRect.width, y: screenRect.top + wv * screenRect.height }
+          }
+          return {
+            key,
+            z: win.z,
+            isMaximized: win.maximized,
+            minimize: warpToScreen(centers.minimize),
+            maximize: warpToScreen(centers.maximize),
+            close: warpToScreen(centers.close),
+          }
+        })
+    : []
+
   return (
     <>
       <div
         ref={screenRef}
         className={`crt-screen ${screenPhase === 'booting' ? 'crt-screen--booting' : 'crt-screen--desktop'}`}
         style={hasRect ? { clipPath: `path("${pathD}")` } : undefined}
+        onClick={() => setSelectedIcon(null)}
       >
         <CrtShaderCanvas
           draw={draw}
@@ -1053,41 +1228,45 @@ export default function CrtScreen() {
             className="crt-screen__windows-layer"
             style={windowsWarp ? { filter: 'url(#crt-window-warp)' } : undefined}
           >
-            {(Object.keys(windows) as WindowKey[]).map((key) => {
-              const win = windows[key]
-              const iconHit = taskbarIconHits.find((icon) => icon.key === key)
-              const minimizeTarget = iconHit
-                ? { x: iconHit.x - screenRect.left, y: iconHit.y - screenRect.top }
-                : { x: startHitPos.x - screenRect.left, y: startHitPos.y - screenRect.top }
-              const safeRect = crtGeometry?.safeRect ?? { x: 0, y: 0, width: screenRect.width, height: screenRect.height }
-              const maximizedRect: WindowRect = {
-                x: safeRect.x,
-                y: safeRect.y,
-                width: safeRect.width,
-                height: Math.max(0, Math.min(safeRect.height, screenRect.height - TASKBAR_HEIGHT - safeRect.y)),
-              }
+            {DESKTOP_ICON_CONFIG.map(({ key, label }) => {
+              const Glyph = DESKTOP_ICON_GLYPHS[key]
               return (
-                <Window
+                <DesktopIcon
                   key={key}
-                  title={WINDOW_TITLES[key]}
-                  isOpen={win.open}
-                  isMinimized={win.minimized}
-                  isMaximized={win.maximized}
-                  zIndex={win.z}
-                  rect={win.rect}
-                  maximizedRect={maximizedRect}
-                  minimizeTarget={minimizeTarget}
+                  label={label}
+                  position={iconPositions[key]}
+                  selected={selectedIcon === key}
                   containerRef={screenRef}
-                  onClose={() => closeWindow(key)}
-                  onMinimize={() => minimizeWindow(key)}
-                  onToggleMaximize={() => toggleMaximizeWindow(key)}
-                  onFocus={() => focusWindow(key)}
-                  onRectChange={(rect) => updateWindowRect(key, rect)}
+                  onSelect={() => setSelectedIcon(key)}
+                  onOpen={() => launchWindow(key)}
+                  onPositionChange={(pos) =>
+                    setIconPositions((prev) => ({ ...prev, [key]: snapToIconGrid(pos) }))
+                  }
                 >
-                  <p>{WINDOW_CONTENT[key]}</p>
-                </Window>
+                  <Glyph />
+                </DesktopIcon>
               )
             })}
+            {windowRenderData.map(({ key, win, minimizeTarget, maximizedRect }) => (
+              <Window
+                key={key}
+                title={WINDOW_TITLES[key]}
+                isOpen={win.open}
+                isMinimized={win.minimized}
+                isMaximized={win.maximized}
+                zIndex={win.z}
+                rect={win.rect}
+                maximizedRect={maximizedRect}
+                minimizeTarget={minimizeTarget}
+                onClose={() => closeWindow(key)}
+                onMinimize={() => minimizeWindow(key)}
+                onToggleMaximize={() => toggleMaximizeWindow(key)}
+                onFocus={() => focusWindow(key)}
+                onRectChange={(rect) => updateWindowRect(key, rect)}
+              >
+                <p>{WINDOW_CONTENT[key]}</p>
+              </Window>
+            ))}
           </div>
         )}
 
@@ -1130,6 +1309,54 @@ export default function CrtScreen() {
                 setHoveredTaskbarIcon((cur) => (cur === icon.key ? null : cur))
               }
             />
+          ))}
+        </div>
+      )}
+
+      {screenPhase === 'desktop' && windowControlHits.length > 0 && (
+        <div className="window-controls-hit">
+          {windowControlHits.map((hit) => (
+            <Fragment key={hit.key}>
+              <button
+                type="button"
+                className="window-controls-hit__button"
+                aria-label="Minimize"
+                style={{
+                  zIndex: hit.z,
+                  left: hit.minimize.x - WINDOW_BUTTON_SIZE.width / 2,
+                  top: hit.minimize.y - WINDOW_BUTTON_SIZE.height / 2,
+                  width: WINDOW_BUTTON_SIZE.width,
+                  height: WINDOW_BUTTON_SIZE.height,
+                }}
+                onClick={() => minimizeWindow(hit.key)}
+              />
+              <button
+                type="button"
+                className="window-controls-hit__button"
+                aria-label={hit.isMaximized ? 'Restore' : 'Maximize'}
+                style={{
+                  zIndex: hit.z,
+                  left: hit.maximize.x - WINDOW_BUTTON_SIZE.width / 2,
+                  top: hit.maximize.y - WINDOW_BUTTON_SIZE.height / 2,
+                  width: WINDOW_BUTTON_SIZE.width,
+                  height: WINDOW_BUTTON_SIZE.height,
+                }}
+                onClick={() => toggleMaximizeWindow(hit.key)}
+              />
+              <button
+                type="button"
+                className="window-controls-hit__button"
+                aria-label="Close"
+                style={{
+                  zIndex: hit.z,
+                  left: hit.close.x - WINDOW_BUTTON_SIZE.width / 2,
+                  top: hit.close.y - WINDOW_BUTTON_SIZE.height / 2,
+                  width: WINDOW_BUTTON_SIZE.width,
+                  height: WINDOW_BUTTON_SIZE.height,
+                }}
+                onClick={() => closeWindow(hit.key)}
+              />
+            </Fragment>
           ))}
         </div>
       )}
