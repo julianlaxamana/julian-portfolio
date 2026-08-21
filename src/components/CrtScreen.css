@@ -24,6 +24,7 @@
 
 .crt-screen__scanlines {
   position: absolute;
+  z-index: 50;
   inset: 0;
   pointer-events: none;
   background: repeating-linear-gradient(
@@ -38,6 +39,7 @@
 
 .crt-screen__flicker {
   position: absolute;
+  z-index: 50;
   inset: 0;
   pointer-events: none;
   background: rgba(255, 255, 255, 0.03);
@@ -49,12 +51,19 @@
   display: none;
 }
 
+.crt-screen__windows-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
 .crt-screen__overlay {
   pointer-events: none;
 }
 
 .crt-screen__vignette {
   position: absolute;
+  z-index: 50;
   inset: 0;
   pointer-events: none;
   background: radial-gradient(
@@ -104,6 +113,18 @@
   pointer-events: auto;
 }
 
+.taskbar-hit__icon {
+  position: absolute;
+  display: block;
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: transparent;
+  text-decoration: none;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
 .start-menu-hit {
   position: fixed;
   inset: 0;
@@ -115,6 +136,8 @@
   position: absolute;
   display: block;
   background: transparent;
+  border: none;
+  padding: 0;
   color: transparent;
   text-decoration: none;
   cursor: pointer;

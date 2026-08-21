@@ -1,0 +1,121 @@
+.window {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  min-width: 220px;
+  min-height: 140px;
+  background: #d4d0c8;
+  border: 2px solid #ffffff;
+  border-right-color: #404040;
+  border-bottom-color: #404040;
+  box-shadow:
+    inset 1px 1px 0 #ffffff,
+    inset -1px -1px 0 #808080,
+    4px 4px 18px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  touch-action: none;
+}
+
+.window__titlebar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px 0 6px;
+  background: linear-gradient(180deg, #bfe3ff 0%, #8fc9f7 45%, #5aa3e8 100%);
+  border-bottom: 1px solid #143a63;
+  cursor: grab;
+  user-select: none;
+}
+
+.window__titlebar:active {
+  cursor: grabbing;
+}
+
+.window__titlebar-text {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: #ffffff;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.4);
+}
+
+.window__icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.window__title {
+  font-family: 'Jersey 10', monospace;
+  font-size: 17px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.window__controls {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex: 0 0 auto;
+}
+
+.window__button {
+  width: 20px;
+  height: 19px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: #d4d0c8;
+  border: 1px solid #ffffff;
+  border-right-color: #404040;
+  border-bottom-color: #404040;
+  color: #000000;
+  cursor: pointer;
+}
+
+.window__button svg {
+  width: 9px;
+  height: 9px;
+  fill: currentColor;
+}
+
+.window__button:active {
+  border-color: #404040;
+  border-right-color: #ffffff;
+  border-bottom-color: #ffffff;
+  transform: translate(1px, 1px);
+}
+
+.window__button--close:hover {
+  background: #e81123;
+  color: #ffffff;
+}
+
+.window__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  background: #ece9d8;
+  color: #1a1a1a;
+  font-family: 'Jersey 10', monospace;
+  font-size: 18px;
+  padding: 14px;
+}
+
+.window__crt-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0) 0px,
+    rgba(0, 0, 0, 0) 1px,
+    rgba(0, 0, 0, 0.06) 2px,
+    rgba(0, 0, 0, 0.06) 3px
+  );
+  mix-blend-mode: multiply;
+}

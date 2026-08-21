@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import CrtShaderCanvas from './CrtShaderCanvas'
+import Window, { type WindowRect } from './Window'
 import './CrtScreen.css'
 
 const FONT_SIZE = 28
@@ -24,6 +25,56 @@ const START_Y = 0
 const DIVIDER_X = START_X + START_WIDTH + GAP
 const DIVIDER_Y = (TASKBAR_HEIGHT - 28) / 2
 const TRAY_Y = (TASKBAR_HEIGHT - TRAY_HEIGHT) / 2
+
+const TASKBAR_ICONS: { key: string; label: string; href: string }[] = [
+  { key: 'about', label: 'About', href: '#about' },
+  { key: 'projects', label: 'Projects', href: '#projects' },
+]
+const ICON_BUTTON_SIZE = 34
+const ICON_GAP = 10
+const ICONS_X = DIVIDER_X + DIVIDER_WIDTH + GAP + 4
+const ICONS_Y = (TASKBAR_HEIGHT - ICON_BUTTON_SIZE) / 2
+const TOOLTIP_GAP = 10
+const TOOLTIP_HEIGHT = 24
+const TOOLTIP_PADDING_X = 10
+
+type WindowKey = 'about' | 'projects' | 'contact'
+
+type WindowInstanceState = {
+  open: boolean
+  minimized: boolean
+  maximized: boolean
+  rect: WindowRect
+  z: number
+}
+
+const WINDOW_TITLES: Record<WindowKey, string> = {
+  about: 'About.txt',
+  projects: 'Projects',
+  contact: 'Contact',
+}
+
+const WINDOW_CONTENT: Record<WindowKey, string> = {
+  about: "Hi, I'm Julian. This desktop is a work in progress — more soon.",
+  projects: 'Project list coming soon.',
+  contact: 'Reach out via the links on the About window.',
+}
+
+const DEFAULT_WINDOW_RECT: Record<WindowKey, WindowRect> = {
+  about: { x: 90, y: 60, width: 420, height: 260 },
+  projects: { x: 150, y: 110, width: 460, height: 300 },
+  contact: { x: 200, y: 90, width: 380, height: 220 },
+}
+
+function createInitialWindowStates(): Record<WindowKey, WindowInstanceState> {
+  const keys: WindowKey[] = ['about', 'projects', 'contact']
+  return Object.fromEntries(
+    keys.map((key) => [
+      key,
+      { open: false, minimized: false, maximized: false, rect: { ...DEFAULT_WINDOW_RECT[key] }, z: 0 },
+    ]),
+  ) as Record<WindowKey, WindowInstanceState>
+}
 
 const MENU_WIDTH = 230
 const MENU_ITEM_HEIGHT = 44
@@ -99,35 +150,44 @@ const HALF_PI = Math.PI / 2
 // fragment shader: a display pixel is background once forwardWarp(vUv) leaves
 // [0,1]). Sampling a rounded rect through inverseWarp keeps the clip path and
 // bezel ring perfectly aligned with the warped screen curvature.
-function buildCrtPath(w: number, h: number, aspect: number, strength: number): string {
+type CrtGeometry = { d: string; safeRect: WindowRect }
+
+function buildCrtPath(w: number, h: number, aspect: number, strength: number): CrtGeometry {
   const rPx = Math.min(CORNER_RADIUS, w / 2, h / 2)
   const rx = rPx / w
   const ry = rPx / h
 
   const src: [number, number][] = []
+  // Segment membership per point, for deriving the inscribed safe rect below:
+  // corners count toward both edges they connect (e.g. the top-left corner
+  // constrains both the top and left safe bounds).
+  const seg: { top?: boolean; bottom?: boolean; left?: boolean; right?: boolean }[] = []
 
-  const line = (x0: number, y0: number, x1: number, y1: number, n: number) => {
+  const line = (x0: number, y0: number, x1: number, y1: number, n: number, tag: (typeof seg)[number]) => {
     for (let i = 1; i <= n; i++) {
       const t = i / n
       src.push([x0 + (x1 - x0) * t, y0 + (y1 - y0) * t])
+      seg.push(tag)
     }
   }
-  const arc = (cx: number, cy: number, a0: number, a1: number, n: number) => {
+  const arc = (cx: number, cy: number, a0: number, a1: number, n: number, tag: (typeof seg)[number]) => {
     for (let i = 1; i <= n; i++) {
       const t = a0 + (a1 - a0) * (i / n)
       src.push([cx + rx * Math.cos(t), cy + ry * Math.sin(t)])
+      seg.push(tag)
     }
   }
 
   src.push([rx, 0])
-  line(rx, 0, 1 - rx, 0, EDGE_SEGMENTS)
-  arc(1 - rx, ry, -HALF_PI, 0, CORNER_SEGMENTS)
-  line(1, ry, 1, 1 - ry, EDGE_SEGMENTS)
-  arc(1 - rx, 1 - ry, 0, HALF_PI, CORNER_SEGMENTS)
-  line(1 - rx, 1, rx, 1, EDGE_SEGMENTS)
-  arc(rx, 1 - ry, HALF_PI, Math.PI, CORNER_SEGMENTS)
-  line(0, 1 - ry, 0, ry, EDGE_SEGMENTS)
-  arc(rx, ry, Math.PI, Math.PI * 1.5, CORNER_SEGMENTS)
+  seg.push({ top: true })
+  line(rx, 0, 1 - rx, 0, EDGE_SEGMENTS, { top: true })
+  arc(1 - rx, ry, -HALF_PI, 0, CORNER_SEGMENTS, { top: true, right: true })
+  line(1, ry, 1, 1 - ry, EDGE_SEGMENTS, { right: true })
+  arc(1 - rx, 1 - ry, 0, HALF_PI, CORNER_SEGMENTS, { bottom: true, right: true })
+  line(1 - rx, 1, rx, 1, EDGE_SEGMENTS, { bottom: true })
+  arc(rx, 1 - ry, HALF_PI, Math.PI, CORNER_SEGMENTS, { bottom: true, left: true })
+  line(0, 1 - ry, 0, ry, EDGE_SEGMENTS, { left: true })
+  arc(rx, ry, Math.PI, Math.PI * 1.5, CORNER_SEGMENTS, { top: true, left: true })
 
   const pts = src.map(([sx, sy]) => {
     const [dx, dy] = inverseWarp(sx, sy, aspect, strength)
@@ -135,11 +195,79 @@ function buildCrtPath(w: number, h: number, aspect: number, strength: number): s
   })
 
   const [first, ...rest] = pts
-  return (
+  const d =
     `M ${first[0]} ${first[1]} ` +
     rest.map(([x, y]) => `L ${x} ${y}`).join(' ') +
     ' Z'
-  )
+
+  // Largest axis-aligned rect inscribed in the warped boundary: for each
+  // side, the worst-case (most intruding) point among that side's edge and
+  // adjoining corners sets that side's safe bound. Keeps window chrome
+  // (titlebars, edges) from being cut off by the CRT curvature.
+  const minX = Math.max(...pts.filter((_, i) => seg[i].left).map(([x]) => x))
+  const maxX = Math.min(...pts.filter((_, i) => seg[i].right).map(([x]) => x))
+  const minY = Math.max(...pts.filter((_, i) => seg[i].top).map(([, y]) => y))
+  const maxY = Math.min(...pts.filter((_, i) => seg[i].bottom).map(([, y]) => y))
+
+  return {
+    d,
+    safeRect: { x: minX, y: minY, width: maxX - minX, height: maxY - minY },
+  }
+}
+
+const WARP_MAP_RES = 96
+
+type WarpDisplacementMap = { dataUrl: string; scale: number }
+
+// Builds an SVG feDisplacementMap texture that reproduces forwardWarp, so DOM
+// content (windows) can be bent with the same curvature the shader applies to
+// canvas layers. R/G channels encode x/y displacement in pixels, centered at
+// 128 and scaled to fit the 0-255 range; `scale` is the matching
+// feDisplacementMap scale attribute (in px, since primitiveUnits is
+// userSpaceOnUse) needed to decode them back.
+function buildWarpDisplacementMap(
+  width: number,
+  height: number,
+  aspect: number,
+  strength: number,
+): WarpDisplacementMap | null {
+  if (width <= 0 || height <= 0) return null
+  const res = WARP_MAP_RES
+  const canvas = document.createElement('canvas')
+  canvas.width = res
+  canvas.height = res
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return null
+
+  const dx = new Float32Array(res * res)
+  const dy = new Float32Array(res * res)
+  let maxAbs = 1
+  for (let j = 0; j < res; j++) {
+    for (let i = 0; i < res; i++) {
+      const u = i / (res - 1)
+      const v = j / (res - 1)
+      const [wu, wv] = forwardWarp(u, v, aspect, strength)
+      const idx = j * res + i
+      const dxPx = (wu - u) * width
+      const dyPx = (wv - v) * height
+      dx[idx] = dxPx
+      dy[idx] = dyPx
+      maxAbs = Math.max(maxAbs, Math.abs(dxPx), Math.abs(dyPx))
+    }
+  }
+
+  const scale = maxAbs * 1.05
+  const imageData = ctx.createImageData(res, res)
+  for (let idx = 0; idx < res * res; idx++) {
+    const p = idx * 4
+    imageData.data[p] = 128 + (dx[idx] / scale) * 127
+    imageData.data[p + 1] = 128 + (dy[idx] / scale) * 127
+    imageData.data[p + 2] = 128
+    imageData.data[p + 3] = 255
+  }
+  ctx.putImageData(imageData, 0, 0)
+
+  return { dataUrl: canvas.toDataURL(), scale }
 }
 
 function formatTime(date: Date) {
@@ -178,6 +306,67 @@ function drawBevel(
   ctx.stroke()
 }
 
+function drawAboutIcon(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
+  const cx = x + size / 2
+  ctx.fillStyle = '#f2b705'
+  ctx.beginPath()
+  ctx.arc(cx, y + size * 0.34, size * 0.17, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.beginPath()
+  ctx.moveTo(x + size * 0.24, y + size * 0.86)
+  ctx.quadraticCurveTo(x + size * 0.24, y + size * 0.56, cx, y + size * 0.56)
+  ctx.quadraticCurveTo(x + size * 0.76, y + size * 0.56, x + size * 0.76, y + size * 0.86)
+  ctx.closePath()
+  ctx.fill()
+}
+
+function drawProjectsIcon(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
+  const w = size * 0.74
+  const h = size * 0.5
+  const fx = x + (size - w) / 2
+  const fy = y + size * 0.34
+
+  ctx.fillStyle = '#f2b705'
+  ctx.fillRect(fx, fy - size * 0.08, w * 0.45, size * 0.1)
+
+  ctx.fillStyle = '#ffce3d'
+  ctx.fillRect(fx, fy, w, h)
+  ctx.strokeStyle = '#8a6d1a'
+  ctx.lineWidth = 1
+  ctx.strokeRect(fx + 0.5, fy + 0.5, w - 1, h - 1)
+}
+
+const TASKBAR_ICON_DRAWERS: Record<
+  string,
+  (ctx: CanvasRenderingContext2D, x: number, y: number, size: number) => void
+> = {
+  about: drawAboutIcon,
+  projects: drawProjectsIcon,
+}
+
+function drawIconTooltip(
+  ctx: CanvasRenderingContext2D,
+  iconCenterX: number,
+  iconTopY: number,
+  label: string,
+) {
+  ctx.font = '15px "Jersey 10", monospace'
+  const textWidth = ctx.measureText(label).width
+  const boxWidth = textWidth + TOOLTIP_PADDING_X * 2
+  const boxX = iconCenterX - boxWidth / 2
+  const boxY = iconTopY - TOOLTIP_GAP - TOOLTIP_HEIGHT
+
+  ctx.fillStyle = '#ffffe1'
+  ctx.fillRect(boxX, boxY, boxWidth, TOOLTIP_HEIGHT)
+  ctx.strokeStyle = '#000000'
+  ctx.lineWidth = 1
+  ctx.strokeRect(boxX + 0.5, boxY + 0.5, boxWidth - 1, TOOLTIP_HEIGHT - 1)
+
+  ctx.fillStyle = '#000000'
+  ctx.textBaseline = 'middle'
+  ctx.fillText(label, boxX + TOOLTIP_PADDING_X, boxY + TOOLTIP_HEIGHT / 2 + 1)
+}
+
 export default function CrtScreen() {
   const [renderedLines, setRenderedLines] = useState<string[]>([])
   const [progress, setProgress] = useState(0)
@@ -190,7 +379,13 @@ export default function CrtScreen() {
     { label: string; href: string; x: number; y: number }[]
   >([])
   const [hoveredMenuIndex, setHoveredMenuIndex] = useState<number | null>(null)
+  const [taskbarIconHits, setTaskbarIconHits] = useState<
+    { key: string; label: string; href: string; x: number; y: number }[]
+  >([])
+  const [hoveredTaskbarIcon, setHoveredTaskbarIcon] = useState<string | null>(null)
   const [screenRect, setScreenRect] = useState({ width: 0, height: 0, left: 0, top: 0 })
+  const [windows, setWindows] = useState<Record<WindowKey, WindowInstanceState>>(createInitialWindowStates)
+  const windowZRef = useRef(0)
   const bootPhaseRef = useRef(bootPhase)
   const screenPhaseRef = useRef(screenPhase)
   const cancelledRef = useRef(false)
@@ -363,6 +558,26 @@ export default function CrtScreen() {
         }
       })
       setMenuItemHits(hits)
+
+      // Taskbar quick-launch icons, warped the same way.
+      const iconCenterY = barY + ICONS_Y + ICON_BUTTON_SIZE / 2
+      const iconHits = TASKBAR_ICONS.map((icon, i) => {
+        const iconCenterX = ICONS_X + i * (ICON_BUTTON_SIZE + ICON_GAP) + ICON_BUTTON_SIZE / 2
+        const [ix, iy] = inverseWarp(
+          iconCenterX / rect.width,
+          iconCenterY / rect.height,
+          aspect,
+          DESKTOP_STRENGTH,
+        )
+        return {
+          key: icon.key,
+          label: icon.label,
+          href: icon.href,
+          x: rect.left + ix * rect.width,
+          y: rect.top + iy * rect.height,
+        }
+      })
+      setTaskbarIconHits(iconHits)
     }
 
     updateHitPos()
@@ -378,6 +593,55 @@ export default function CrtScreen() {
     }
     if (!startOpen) setHoveredMenuIndex(null)
   }, [startOpen])
+
+  const focusWindow = useCallback((key: WindowKey) => {
+    windowZRef.current = windowZRef.current >= 40 ? 1 : windowZRef.current + 1
+    const z = windowZRef.current
+    setWindows((prev) => ({ ...prev, [key]: { ...prev[key], z } }))
+  }, [])
+
+  const openWindow = useCallback(
+    (key: WindowKey) => {
+      setWindows((prev) => {
+        const win = prev[key]
+        if (win.open && !win.minimized) return prev
+        return { ...prev, [key]: { ...win, open: true, minimized: false } }
+      })
+      focusWindow(key)
+    },
+    [focusWindow],
+  )
+
+  const closeWindow = useCallback((key: WindowKey) => {
+    setWindows((prev) => ({ ...prev, [key]: { ...prev[key], open: false, minimized: false } }))
+  }, [])
+
+  const minimizeWindow = useCallback((key: WindowKey) => {
+    setWindows((prev) => ({ ...prev, [key]: { ...prev[key], minimized: true } }))
+  }, [])
+
+  const toggleMaximizeWindow = useCallback((key: WindowKey) => {
+    setWindows((prev) => ({ ...prev, [key]: { ...prev[key], maximized: !prev[key].maximized } }))
+  }, [])
+
+  const updateWindowRect = useCallback((key: WindowKey, rect: Partial<WindowRect>) => {
+    setWindows((prev) => ({ ...prev, [key]: { ...prev[key], rect: { ...prev[key].rect, ...rect } } }))
+  }, [])
+
+  const launchWindow = useCallback(
+    (key: WindowKey) => {
+      const win = windows[key]
+      if (win.open && win.minimized) {
+        setWindows((prev) => ({ ...prev, [key]: { ...prev[key], minimized: false } }))
+        focusWindow(key)
+      } else if (win.open) {
+        focusWindow(key)
+      } else {
+        openWindow(key)
+      }
+    },
+    [windows, focusWindow, openWindow],
+  )
 
   const showPrompt = bootPhase === 'ready'
 
@@ -454,7 +718,13 @@ export default function CrtScreen() {
   )
 
   const drawTaskbar = useCallback(
-    (ctx: CanvasRenderingContext2D, widthCss: number, barY: number, startActive: boolean) => {
+    (
+      ctx: CanvasRenderingContext2D,
+      widthCss: number,
+      barY: number,
+      startActive: boolean,
+      hoveredIcon: string | null,
+    ) => {
       const barGradient = ctx.createLinearGradient(0, barY, 0, barY + TASKBAR_HEIGHT)
       barGradient.addColorStop(0, '#bfe3ff')
       barGradient.addColorStop(0.45, '#8fc9f7')
@@ -500,6 +770,20 @@ export default function CrtScreen() {
       ctx.fillRect(DIVIDER_X, dividerY, 1, 28)
       ctx.fillStyle = '#ffffff'
       ctx.fillRect(DIVIDER_X + 1, dividerY, 1, 28)
+
+      TASKBAR_ICONS.forEach((icon, i) => {
+        const iconX = ICONS_X + i * (ICON_BUTTON_SIZE + ICON_GAP)
+        const iconY = barY + ICONS_Y
+        const hovered = hoveredIcon === icon.key
+
+        if (hovered) {
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.3)'
+          ctx.fillRect(iconX, iconY, ICON_BUTTON_SIZE, ICON_BUTTON_SIZE)
+          drawBevel(ctx, iconX, iconY, ICON_BUTTON_SIZE, ICON_BUTTON_SIZE, true)
+        }
+
+        TASKBAR_ICON_DRAWERS[icon.key]?.(ctx, iconX, iconY, ICON_BUTTON_SIZE)
+      })
 
       const trayX = widthCss - BAR_PADDING - TRAY_WIDTH
       const trayY = barY + TRAY_Y
@@ -657,10 +941,20 @@ export default function CrtScreen() {
       menuTRef.current = from + (to - from) * eased
 
       drawStartMenu(ctx, barY, menuTRef.current, hoveredMenuIndex)
-      drawTaskbar(ctx, widthCss, barY, startOpen)
+      drawTaskbar(ctx, widthCss, barY, startOpen, hoveredTaskbarIcon)
+
+      const hoveredIndex = TASKBAR_ICONS.findIndex((icon) => icon.key === hoveredTaskbarIcon)
+      if (hoveredIndex !== -1) {
+        const icon = TASKBAR_ICONS[hoveredIndex]
+        const iconX = ICONS_X + hoveredIndex * (ICON_BUTTON_SIZE + ICON_GAP)
+        const iconCenterX = iconX + ICON_BUTTON_SIZE / 2
+        const iconTopY = barY + ICONS_Y
+        drawIconTooltip(ctx, iconCenterX, iconTopY, icon.label)
+      }
+
       ctx.restore()
     },
-    [drawTaskbar, drawStartMenu, startOpen, hoveredMenuIndex],
+    [drawTaskbar, drawStartMenu, startOpen, hoveredMenuIndex, hoveredTaskbarIcon],
   )
 
   const draw = useCallback(
@@ -677,12 +971,25 @@ export default function CrtScreen() {
   const bgColor = screenPhase === 'booting' ? BOOT_BG_COLOR : DESKTOP_BG_COLOR
   const strength = screenPhase === 'booting' ? BOOT_STRENGTH : DESKTOP_STRENGTH
   const hasRect = screenRect.width > 0 && screenRect.height > 0
-  const pathD = useMemo(
+  const crtGeometry = useMemo(
     () =>
       hasRect
         ? buildCrtPath(screenRect.width, screenRect.height, screenRect.width / screenRect.height, strength)
-        : '',
+        : null,
     [hasRect, screenRect.width, screenRect.height, strength],
+  )
+  const pathD = crtGeometry?.d ?? ''
+  const windowsWarp = useMemo(
+    () =>
+      hasRect && screenPhase === 'desktop'
+        ? buildWarpDisplacementMap(
+            screenRect.width,
+            screenRect.height,
+            screenRect.width / screenRect.height,
+            DESKTOP_STRENGTH,
+          )
+        : null,
+    [hasRect, screenPhase, screenRect.width, screenRect.height],
   )
 
   return (
@@ -708,6 +1015,82 @@ export default function CrtScreen() {
           />
         )}
 
+        {windowsWarp && (
+          <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true">
+            <defs>
+              <filter
+                id="crt-window-warp"
+                x="0"
+                y="0"
+                width="100%"
+                height="100%"
+                primitiveUnits="userSpaceOnUse"
+                colorInterpolationFilters="sRGB"
+              >
+                <feImage
+                  href={windowsWarp.dataUrl}
+                  x="0"
+                  y="0"
+                  width={screenRect.width}
+                  height={screenRect.height}
+                  preserveAspectRatio="none"
+                  result="crtWindowWarpMap"
+                />
+                <feDisplacementMap
+                  in="SourceGraphic"
+                  in2="crtWindowWarpMap"
+                  scale={windowsWarp.scale}
+                  xChannelSelector="R"
+                  yChannelSelector="G"
+                />
+              </filter>
+            </defs>
+          </svg>
+        )}
+
+        {screenPhase === 'desktop' && (
+          <div
+            className="crt-screen__windows-layer"
+            style={windowsWarp ? { filter: 'url(#crt-window-warp)' } : undefined}
+          >
+            {(Object.keys(windows) as WindowKey[]).map((key) => {
+              const win = windows[key]
+              const iconHit = taskbarIconHits.find((icon) => icon.key === key)
+              const minimizeTarget = iconHit
+                ? { x: iconHit.x - screenRect.left, y: iconHit.y - screenRect.top }
+                : { x: startHitPos.x - screenRect.left, y: startHitPos.y - screenRect.top }
+              const safeRect = crtGeometry?.safeRect ?? { x: 0, y: 0, width: screenRect.width, height: screenRect.height }
+              const maximizedRect: WindowRect = {
+                x: safeRect.x,
+                y: safeRect.y,
+                width: safeRect.width,
+                height: Math.max(0, Math.min(safeRect.height, screenRect.height - TASKBAR_HEIGHT - safeRect.y)),
+              }
+              return (
+                <Window
+                  key={key}
+                  title={WINDOW_TITLES[key]}
+                  isOpen={win.open}
+                  isMinimized={win.minimized}
+                  isMaximized={win.maximized}
+                  zIndex={win.z}
+                  rect={win.rect}
+                  maximizedRect={maximizedRect}
+                  minimizeTarget={minimizeTarget}
+                  containerRef={screenRef}
+                  onClose={() => closeWindow(key)}
+                  onMinimize={() => minimizeWindow(key)}
+                  onToggleMaximize={() => toggleMaximizeWindow(key)}
+                  onFocus={() => focusWindow(key)}
+                  onRectChange={(rect) => updateWindowRect(key, rect)}
+                >
+                  <p>{WINDOW_CONTENT[key]}</p>
+                </Window>
+              )
+            })}
+          </div>
+        )}
+
         <div className="crt-screen__overlay" aria-hidden="true">
           <div className="crt-screen__scanlines" />
           <div className="crt-screen__flicker" />
@@ -729,15 +1112,34 @@ export default function CrtScreen() {
             }}
             onClick={() => setStartOpen((open) => !open)}
           />
+          {taskbarIconHits.map((icon) => (
+            <button
+              type="button"
+              key={icon.key}
+              className="taskbar-hit__icon"
+              aria-label={icon.label}
+              style={{
+                left: icon.x - ICON_BUTTON_SIZE / 2,
+                top: icon.y - ICON_BUTTON_SIZE / 2,
+                width: ICON_BUTTON_SIZE,
+                height: ICON_BUTTON_SIZE,
+              }}
+              onClick={() => launchWindow(icon.key as WindowKey)}
+              onMouseEnter={() => setHoveredTaskbarIcon(icon.key)}
+              onMouseLeave={() =>
+                setHoveredTaskbarIcon((cur) => (cur === icon.key ? null : cur))
+              }
+            />
+          ))}
         </div>
       )}
 
       {screenPhase === 'desktop' && startOpen && (
         <div className="start-menu-hit">
           {menuItemHits.map((item, i) => (
-            <a
+            <button
+              type="button"
               key={item.href}
-              href={item.href}
               className="start-menu-hit__item"
               style={{
                 left: item.x - MENU_WIDTH / 2,
@@ -746,7 +1148,10 @@ export default function CrtScreen() {
                 height: MENU_ITEM_HEIGHT,
               }}
               aria-label={item.label}
-              onClick={() => setStartOpen(false)}
+              onClick={() => {
+                setStartOpen(false)
+                launchWindow(item.href.slice(1) as WindowKey)
+              }}
               onMouseEnter={() => setHoveredMenuIndex(i)}
               onMouseLeave={() => setHoveredMenuIndex((cur) => (cur === i ? null : cur))}
             />
