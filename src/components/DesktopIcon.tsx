@@ -1,5 +1,5 @@
-import { useState, type ReactNode, type RefObject } from 'react'
-import { motion } from 'motion/react'
+import { type ReactNode, type RefObject } from 'react'
+import { motion, useMotionValue, animate } from 'motion/react'
 import './DesktopIcon.css'
 
 export type IconPosition = { x: number; y: number }
@@ -11,9 +11,16 @@ type DesktopIconProps = {
   containerRef: RefObject<HTMLElement | null>
   onSelect: () => void
   onOpen: () => void
-  onPositionChange: (position: IconPosition) => void
+  // Resolves a raw drop position (e.g. against grid/collision rules) and
+  // returns where the icon should actually end up, so the caller can drive
+  // the motion values directly instead of relying on the `animate` prop —
+  // which won't re-trigger when the resolved position is unchanged from
+  // before the drag (e.g. snapping back after landing on an occupied tile).
+  onPositionChange: (position: IconPosition) => IconPosition
   children: ReactNode
 }
+
+const SNAP_TRANSITION = { duration: 0.15, ease: 'easeOut' as const }
 
 export default function DesktopIcon({
   label,
@@ -25,27 +32,26 @@ export default function DesktopIcon({
   onPositionChange,
   children,
 }: DesktopIconProps) {
-  const [isDragging, setIsDragging] = useState(false)
+  const x = useMotionValue(position.x)
+  const y = useMotionValue(position.y)
 
   return (
     <motion.div
       className={`desktop-icon${selected ? ' desktop-icon--selected' : ''}`}
-      style={{ pointerEvents: 'auto', zIndex: 0 }}
+      style={{ x, y, pointerEvents: 'auto', zIndex: 0 }}
       role="button"
       tabIndex={0}
       aria-label={label}
-      initial={false}
-      animate={{ x: position.x, y: position.y }}
-      transition={isDragging ? { duration: 0 } : { duration: 0.15, ease: 'easeOut' }}
       drag
       dragMomentum={false}
       dragElastic={0}
       dragConstraints={containerRef}
       onPointerDown={(e) => e.stopPropagation()}
-      onDragStart={() => setIsDragging(true)}
       onDragEnd={(_, info) => {
-        setIsDragging(false)
-        onPositionChange({ x: position.x + info.offset.x, y: position.y + info.offset.y })
+        const dropped = { x: position.x + info.offset.x, y: position.y + info.offset.y }
+        const resolved = onPositionChange(dropped)
+        animate(x, resolved.x, SNAP_TRANSITION)
+        animate(y, resolved.y, SNAP_TRANSITION)
       }}
       onClick={(e) => {
         e.stopPropagation()

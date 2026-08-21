@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { PROJECTS } from '../data/projects'
 import './AboutContent.css'
 
 const HOVER_PHOTOS = ['/julian2.jpg', '/julian3.jpg']
@@ -20,10 +21,25 @@ function LinkedinIcon() {
   )
 }
 
-export default function AboutContent() {
+function ProjectImagePlaceholder() {
+  return (
+    <div className="about-project__image about-project__image--placeholder">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 4h16v16H4V4zm2 2v10.59l4-4 3 3 5-5V6H6zm2 8.83l2.29-2.29a1 1 0 0 1 1.42 0L12 12.83l3.29-3.3a1 1 0 0 1 1.42 0L18 10.83V6H6v8.83zM9 9a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z" />
+      </svg>
+    </div>
+  )
+}
+
+type AboutContentProps = {
+  onOpenProject: (id: string) => void
+}
+
+export default function AboutContent({ onOpenProject }: AboutContentProps) {
   const [hoverSrc, setHoverSrc] = useState<string | null>(null)
   const [isHovering, setIsHovering] = useState(false)
   const [transitionId, setTransitionId] = useState(0)
+  const [projectIndex, setProjectIndex] = useState(0)
   const tapTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => () => {
@@ -45,6 +61,16 @@ export default function AboutContent() {
     if (tapTimeoutRef.current) clearTimeout(tapTimeoutRef.current)
     triggerGlitch()
     tapTimeoutRef.current = setTimeout(revertGlitch, TAP_DISPLAY_MS)
+  }
+
+  const project = PROJECTS[projectIndex]
+
+  const goToPrevProject = () => {
+    setProjectIndex((index) => (index - 1 + PROJECTS.length) % PROJECTS.length)
+  }
+
+  const goToNextProject = () => {
+    setProjectIndex((index) => (index + 1) % PROJECTS.length)
   }
 
   const baseClass =
@@ -112,15 +138,94 @@ export default function AboutContent() {
 
       <div className="about-section">
         <span className="about-section__title">Education</span>
-        <p className="about-section__item">B.S. Computer Science</p>
-        <p className="about-section__meta">University of California, Los Angeles</p>
+        <div className="about-edu-list">
+          <div className="about-edu-item">
+            <div className="about-edu-item__rail">
+              <span className="about-edu-item__icon">
+                <img src="/ucla.png" alt="UCLA logo" />
+              </span>
+            </div>
+            <div className="about-edu-item__body">
+              <div className="about-edu-item__info">
+                <p className="about-section__item">B.S. Computer Science</p>
+                <p className="about-section__meta">University of California, Los Angeles</p>
+              </div>
+              <p className="about-section__years">2025 – 2027</p>
+            </div>
+          </div>
+          <div className="about-edu-item">
+            <div className="about-edu-item__rail">
+              <span className="about-edu-item__icon">
+                <img src="/ccc.png" alt="Clovis Community College logo" />
+              </span>
+            </div>
+            <div className="about-edu-item__body">
+              <div className="about-edu-item__info">
+                <p className="about-section__item">A.S. Computer Science</p>
+                <p className="about-section__meta">Clovis Community College</p>
+              </div>
+              <p className="about-section__years">2023 – 2025</p>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="about-section">
-        <span className="about-section__title">Currently Building</span>
-        <ul className="about-section__list">
-          <li>This desktop portfolio — React + a custom WebGL CRT shader</li>
-        </ul>
+        <span className="about-section__title">Featured Projects</span>
+        <div className="about-projects">
+          <button
+            type="button"
+            className="about-projects__arrow"
+            aria-label="Previous project"
+            onClick={goToPrevProject}
+            onPointerDownCapture={(e) => e.stopPropagation()}
+          >
+            ‹
+          </button>
+          <div className="about-project">
+            {project.image ? (
+              <img className="about-project__image" src={project.image} alt={project.title} />
+            ) : (
+              <ProjectImagePlaceholder />
+            )}
+            <div className="about-project__body">
+              <p className="about-project__title">{project.title}</p>
+              <p className="about-project__description">{project.description}</p>
+              <div className="about-project__tags">
+                {project.tags.map((tag) => (
+                  <span className="about-project__tag" key={tag}>
+                    {tag}
+                  </span>
+                ))}
+              </div>
+              <button
+                type="button"
+                className="about-project__open"
+                onPointerDownCapture={(e) => e.stopPropagation()}
+                onClick={() => onOpenProject(project.id)}
+              >
+                Open Project
+              </button>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="about-projects__arrow"
+            aria-label="Next project"
+            onClick={goToNextProject}
+            onPointerDownCapture={(e) => e.stopPropagation()}
+          >
+            ›
+          </button>
+        </div>
+        <div className="about-projects__dots">
+          {PROJECTS.map((p, i) => (
+            <span
+              key={p.title}
+              className={`about-projects__dot ${i === projectIndex ? 'about-projects__dot--active' : ''}`}
+            />
+          ))}
+        </div>
       </div>
     </div>
   )

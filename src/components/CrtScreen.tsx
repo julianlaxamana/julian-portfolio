@@ -3,6 +3,11 @@ import CrtShaderCanvas from './CrtShaderCanvas'
 import Window, { getWindowControlCenters, WINDOW_BUTTON_SIZE, type Point, type WindowRect } from './Window'
 import DesktopIcon, { type IconPosition } from './DesktopIcon'
 import AboutContent from './AboutContent'
+import ContactContent from './ContactContent'
+import SkillsContent from './SkillsContent'
+import ProjectsContent from './ProjectsContent'
+import ProjectWindowContent from './ProjectWindowContent'
+import { getProjectById } from '../data/projects'
 import './CrtScreen.css'
 
 const FONT_SIZE = 30
@@ -35,6 +40,7 @@ const TASKBAR_ICONS: { key: string; label: string; href: string }[] = [
   { key: 'about', label: 'About', href: '#about' },
   { key: 'projects', label: 'Projects', href: '#projects' },
   { key: 'contact', label: 'Contact', href: '#contact' },
+  { key: 'skills', label: 'Skills', href: '#skills' },
 ]
 const ICON_BUTTON_SIZE = 40
 const ICON_GAP = 12
@@ -44,8 +50,10 @@ const TOOLTIP_GAP = 12
 const TOOLTIP_HEIGHT = 26
 const TOOLTIP_PADDING_X = 12
 
-type WindowKey = 'about' | 'projects' | 'contact'
-type DesktopIconKey = 'about' | 'projects' | 'contact'
+type BaseWindowKey = 'about' | 'projects' | 'contact' | 'skills'
+type ProjectWindowKey = `project:${string}`
+type WindowKey = BaseWindowKey | ProjectWindowKey
+type DesktopIconKey = 'about' | 'projects' | 'contact' | 'skills'
 
 type WindowInstanceState = {
   open: boolean
@@ -56,32 +64,51 @@ type WindowInstanceState = {
   z: number
 }
 
-const WINDOW_TITLES: Record<WindowKey, string> = {
+const WINDOW_TITLES: Record<BaseWindowKey, string> = {
   about: 'About Me',
   projects: 'Projects',
   contact: 'Contact',
+  skills: 'Skills',
 }
 
-const WINDOW_CONTENT: Record<WindowKey, string> = {
-  about: "Hi, I'm Julian. This desktop is a work in progress — more soon.",
-  projects: 'Project list coming soon.',
-  contact: 'Reach out via the links on the About window.',
-}
-
-const DEFAULT_WINDOW_RECT: Record<WindowKey, WindowRect> = {
-  about: { x: 90, y: 60, width: 560, height: 360 },
+const DEFAULT_WINDOW_RECT: Record<BaseWindowKey, WindowRect> = {
+  about: { x: 170, y: 100, width: 560, height: 360 },
   projects: { x: 150, y: 110, width: 600, height: 400 },
   contact: { x: 200, y: 90, width: 520, height: 320 },
+  skills: { x: 760, y: 220, width: 420, height: 300 },
 }
 
-function createInitialWindowStates(): Record<WindowKey, WindowInstanceState> {
-  const keys: WindowKey[] = ['about', 'projects', 'contact']
+const PROJECT_WINDOW_KEY_PREFIX = 'project:'
+const PROJECT_WINDOW_DEFAULT_RECT: WindowRect = { x: 250, y: 140, width: 560, height: 460 }
+const PROJECT_WINDOW_CASCADE = 32
+
+function isProjectWindowKey(key: string): key is ProjectWindowKey {
+  return key.startsWith(PROJECT_WINDOW_KEY_PREFIX)
+}
+
+function projectWindowKey(projectId: string): ProjectWindowKey {
+  return `${PROJECT_WINDOW_KEY_PREFIX}${projectId}`
+}
+
+function projectIdFromKey(key: ProjectWindowKey): string {
+  return key.slice(PROJECT_WINDOW_KEY_PREFIX.length)
+}
+
+function getWindowTitle(key: WindowKey): string {
+  if (isProjectWindowKey(key)) {
+    return getProjectById(projectIdFromKey(key))?.title ?? 'Project'
+  }
+  return WINDOW_TITLES[key]
+}
+
+function createInitialWindowStates(): Record<string, WindowInstanceState> {
+  const keys: BaseWindowKey[] = ['about', 'projects', 'contact', 'skills']
   return Object.fromEntries(
     keys.map((key) => [
       key,
       { open: false, minimized: false, maximized: false, rect: { ...DEFAULT_WINDOW_RECT[key] }, z: 0 },
     ]),
-  ) as Record<WindowKey, WindowInstanceState>
+  )
 }
 
 const MENU_WIDTH = 260
@@ -102,7 +129,36 @@ function easeOutExpo(t: number) {
   return t >= 1 ? 1 : 1 - Math.pow(2, -10 * t)
 }
 
+const PRELOAD_IMAGE_SRCS = ['/julian.jpg', '/julian2.jpg', '/julian3.jpg', '/ucla.png', '/ccc.png']
+
 type Line = { text: string; delayAfter?: number }
+
+const BOOT_ASCII_ART = [
+  '⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⡠⠤⠐⠒⠒⠠⠤⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀',
+  '⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⠔⠉⢀⡆⠀⠀⠀⠀⠀⠀⠑⢄⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀',
+  '⠀⠀⠀⠀⠀⠀⠀⠀⣴⠃⡄⢀⠏⢀⠎⠀⢀⠀⠀⡀⠀⠈⡷⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀',
+  '⠀⠀⠀⠀⠀⠀⠀⣸⡇⣸⠀⡜⠀⡼⠁⠀⠎⠀⢀⡇⠀⣰⢸⢱⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀',
+  '⠀⠀⠀⠀⠀⠀⢰⢿⡇⡏⣸⡇⢰⢣⣆⡾⢠⢠⢾⣱⣄⣿⣰⡆⣇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀',
+  '⠀⠀⠀⠀⠀⠀⢸⣾⣿⣷⣿⣾⣿⣿⢿⣵⣿⠟⠾⠟⡿⣿⣿⣇⠈⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀',
+  '⠀⠀⠀⠀⠀⠀⢸⣟⣿⣿⡗⣟⣛⣗⠋⠓⠁⢾⣿⣿⣶⠈⣾⣿⡞⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀',
+  '⠀⠀⠀⠀⠀⠀⠘⣿⣿⣿⡇⢟⣿⡷⠄⠀⠀⠀⠁⠛⠁⢰⣿⡟⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀',
+  '⠀⠀⠀⠀⠀⠀⠀⠘⠿⣿⣷⡲⡉⠀⠀⠀⡀⠀⠀⠀⠀⡾⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀',
+  '⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠻⠿⢕⣄⠀⠬⠿⠥⠒⢀⡼⣟⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀',
+  '⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠐⣿⣿⣶⡬⠵⡊⡇⡇⣹⡵⢤⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀',
+  '⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⡤⣞⣿⣿⣻⡒⣷⢷⡵⣯⡋⠒⢍⡓⢦⣄⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀',
+  '⠀⠀⠀⠀⠀⠀⠀⢀⠔⣚⡫⠗⠺⢿⠿⡿⣼⣾⣟⡛⠛⠁⠈⠑⠢⢌⡝⠣⡑⣧⡀⠀⠀⠀⠀⠀⠀⠀',
+  '⠀⠀⠀⠀⠀⠀⠀⢸⡿⣴⣷⠀⠀⠀⡹⢓⡟⢒⠏⠁⣀⢀⡀⠀⢠⡜⠈⢆⠱⣸⣇⡀⠀⠀⠀⠀⠀⠀',
+  '⠀⠀⠀⠀⠀⠀⢀⢷⣣⣠⢏⡀⠀⢠⠁⡼⠁⣬⠶⣶⣿⣽⠧⠤⢿⣧⠀⠈⢢⣈⡞⢧⠀⠀⠀⠀⠀⠀',
+  '⠀⠀⠀⠀⠀⢀⡮⠛⣿⣿⠀⠀⠉⠇⣸⠃⡘⠙⠒⢫⣶⡄⠀⡰⠟⣿⣿⣿⣿⠿⡈⢎⢣⠀⠀⠀⠀⠀',
+  '⠀⠀⠀⠀⢠⣿⠃⣸⣿⣘⣢⣤⣼⠤⡯⣰⣁⣀⣀⣈⣉⣀⣴⣁⣠⣿⣿⣿⡇⠀⠑⡄⢣⣣⠀⠀⠀⠀',
+  '⠀⠀⠀⢠⣿⣷⣿⣿⣿⣿⣿⣿⣿⣴⣿⣬⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠙⢻⣿⣄⠀⠈⢆⠱⣣⡀⠀⠀',
+  '⠀⠀⣠⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠏⠀⠀⠉⢿⣿⣿⣦⠧⡘⣷⡀⠀',
+  '⠀⣰⣿⣿⣿⣿⣿⡿⠃⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠿⢻⣿⣿⡟⠀⠀⠀⠀⠀⢻⣿⡟⠁⠙⡌⣿⡄',
+  '⣰⣿⣿⣿⣿⣿⡟⠀⢀⣿⣿⣿⣿⣿⣿⣿⡿⠟⢛⠁⠀⣼⢿⣿⡇⠀⠀⠀⢀⡴⠚⠉⠀⠀⢀⣸⣾⡇',
+  '⣿⣿⣿⣿⠿⠿⠷⣶⣴⣿⣿⣿⡟⢫⡏⠀⡇⢠⠫⡱⢌⠁⠻⣿⣧⠀⣀⡾⢋⣠⣴⣶⣾⣿⣿⡿⠋⠁',
+  '⠻⣿⣿⣿⣷⣶⣿⣿⣿⣿⣿⣧⡇⢸⠇⢠⠃⠈⠑⢌⠢⣳⣤⣿⣿⠻⠿⣱⣿⣿⣿⣿⣿⡿⠋⠀⠀⠀',
+  '⠀⠈⠻⣿⣿⣿⣿⣿⣿⣿⣿⢿⣿⣿⣷⣾⣤⣄⣀⡀⣽⢹⣿⣿⣷⣦⣴⣿⣿⣿⡿⠟⠉⠀⠀⠀⠀⠀',
+]
 
 const BOOT_LINES: Line[] = [
   { text: 'JULIAN-BIOS (C) 2026 J. LAXAMANA SYSTEMS', delayAfter: 200 },
@@ -120,6 +176,8 @@ const BOOT_LINES: Line[] = [
 
 const TYPE_SPEED = 14
 const LINE_PAUSE = 60
+const POWER_ON_SWAP_DELAY = 140
+const POWER_ON_DURATION = 640
 const DESKTOP_STRENGTH = 0.15
 const BOOT_STRENGTH = DESKTOP_STRENGTH
 
@@ -402,6 +460,43 @@ function drawContactIcon(ctx: CanvasRenderingContext2D, x: number, y: number, si
   ctx.stroke()
 }
 
+function drawSkillsIcon(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
+  const w = size * 0.6
+  const h = size * 0.8
+  const fx = x + (size - w) / 2
+  const fy = y + (size - h) / 2
+  const fold = size * 0.16
+
+  ctx.fillStyle = '#ffce3d'
+  ctx.beginPath()
+  ctx.moveTo(fx, fy)
+  ctx.lineTo(fx + w - fold, fy)
+  ctx.lineTo(fx + w, fy + fold)
+  ctx.lineTo(fx + w, fy + h)
+  ctx.lineTo(fx, fy + h)
+  ctx.closePath()
+  ctx.fill()
+  ctx.strokeStyle = '#8a6d1a'
+  ctx.lineWidth = 1
+  ctx.stroke()
+
+  ctx.fillStyle = '#f2b705'
+  ctx.beginPath()
+  ctx.moveTo(fx + w - fold, fy)
+  ctx.lineTo(fx + w - fold, fy + fold)
+  ctx.lineTo(fx + w, fy + fold)
+  ctx.closePath()
+  ctx.fill()
+
+  ctx.fillStyle = '#8a6d1a'
+  const lineWidth = w * 0.7
+  const lineX = fx + w * 0.15
+  const lineH = Math.max(1, size * 0.05)
+  ctx.fillRect(lineX, fy + h * 0.45, lineWidth, lineH)
+  ctx.fillRect(lineX, fy + h * 0.6, lineWidth, lineH)
+  ctx.fillRect(lineX, fy + h * 0.75, lineWidth * 0.6, lineH)
+}
+
 const TASKBAR_ICON_DRAWERS: Record<
   string,
   (ctx: CanvasRenderingContext2D, x: number, y: number, size: number) => void
@@ -409,6 +504,7 @@ const TASKBAR_ICON_DRAWERS: Record<
   about: drawAboutIcon,
   projects: drawProjectsIcon,
   contact: drawContactIcon,
+  skills: drawSkillsIcon,
 }
 
 const MENU_ICON_DRAWERS: Record<
@@ -418,6 +514,7 @@ const MENU_ICON_DRAWERS: Record<
   '#about': drawAboutIcon,
   '#projects': drawProjectsIcon,
   '#contact': drawContactIcon,
+  '#skills': drawSkillsIcon,
 }
 
 function AboutIconGlyph() {
@@ -447,16 +544,30 @@ function ContactIconGlyph() {
   )
 }
 
+function SkillsIconGlyph() {
+  return (
+    <svg viewBox="0 0 100 100" aria-hidden="true">
+      <path d="M20 10 H65 L80 25 V90 H20 Z" fill="#ffce3d" stroke="#8a6d1a" strokeWidth="1" />
+      <path d="M65 10 V25 H80 Z" fill="#f2b705" stroke="#8a6d1a" strokeWidth="1" />
+      <rect x="30" y="44" width="40" height="6" fill="#8a6d1a" />
+      <rect x="30" y="58" width="40" height="6" fill="#8a6d1a" />
+      <rect x="30" y="72" width="26" height="6" fill="#8a6d1a" />
+    </svg>
+  )
+}
+
 const DESKTOP_ICON_CONFIG: { key: DesktopIconKey; label: string }[] = [
   { key: 'about', label: 'About Me' },
   { key: 'projects', label: 'Projects' },
   { key: 'contact', label: 'Contact' },
+  { key: 'skills', label: 'skills.txt' },
 ]
 
 const DESKTOP_ICON_GLYPHS: Record<DesktopIconKey, () => ReactElement> = {
   about: AboutIconGlyph,
   projects: ProjectsIconGlyph,
   contact: ContactIconGlyph,
+  skills: SkillsIconGlyph,
 }
 
 const DESKTOP_ICON_GAP_Y = 120
@@ -464,18 +575,37 @@ const DEFAULT_ICON_POSITIONS: Record<DesktopIconKey, IconPosition> = {
   about: { x: 28, y: 28 },
   projects: { x: 28, y: 28 + DESKTOP_ICON_GAP_Y },
   contact: { x: 28, y: 28 + DESKTOP_ICON_GAP_Y * 2 },
+  skills: { x: 28, y: 28 + DESKTOP_ICON_GAP_Y * 3 },
 }
 
 const ICON_GRID_ORIGIN: IconPosition = { x: 28, y: 28 }
 const ICON_GRID_CELL = { width: 112, height: DESKTOP_ICON_GAP_Y }
 
-function snapToIconGrid(pos: IconPosition): IconPosition {
-  const col = Math.max(0, Math.round((pos.x - ICON_GRID_ORIGIN.x) / ICON_GRID_CELL.width))
-  const row = Math.max(0, Math.round((pos.y - ICON_GRID_ORIGIN.y) / ICON_GRID_CELL.height))
+function iconGridCell(pos: IconPosition): { col: number; row: number } {
+  return {
+    col: Math.max(0, Math.round((pos.x - ICON_GRID_ORIGIN.x) / ICON_GRID_CELL.width)),
+    row: Math.max(0, Math.round((pos.y - ICON_GRID_ORIGIN.y) / ICON_GRID_CELL.height)),
+  }
+}
+
+function iconCellToPosition(col: number, row: number): IconPosition {
   return {
     x: ICON_GRID_ORIGIN.x + col * ICON_GRID_CELL.width,
     y: ICON_GRID_ORIGIN.y + row * ICON_GRID_CELL.height,
   }
+}
+
+function gridCellKey(col: number, row: number) {
+  return `${col},${row}`
+}
+
+// Snaps to the nearest grid cell, unless that tile is already occupied by
+// another icon, in which case the drag is rejected — the caller should keep
+// the icon at its pre-drag position instead of stacking two icons on one tile.
+function snapToIconGrid(pos: IconPosition, occupiedCells: Set<string>): IconPosition | null {
+  const { col, row } = iconGridCell(pos)
+  if (occupiedCells.has(gridCellKey(col, row))) return null
+  return iconCellToPosition(col, row)
 }
 
 function drawSoundIcon(
@@ -545,6 +675,7 @@ export default function CrtScreen() {
   const [progress, setProgress] = useState(0)
   const [bootPhase, setBootPhase] = useState<'boot' | 'ready'>('boot')
   const [screenPhase, setScreenPhase] = useState<'booting' | 'desktop'>('booting')
+  const [poweringOn, setPoweringOn] = useState(false)
   const [cursorOn, setCursorOn] = useState(true)
   const [startOpen, setStartOpen] = useState(false)
   const [startHitPos, setStartHitPos] = useState({ x: START_X + START_WIDTH / 2, y: START_Y + START_HEIGHT / 2 })
@@ -560,14 +691,18 @@ export default function CrtScreen() {
   const [hoveredSound, setHoveredSound] = useState(false)
   const [soundHitPos, setSoundHitPos] = useState({ x: 0, y: 0 })
   const [screenRect, setScreenRect] = useState({ width: 0, height: 0, left: 0, top: 0 })
-  const [windows, setWindows] = useState<Record<WindowKey, WindowInstanceState>>(createInitialWindowStates)
+  const [windows, setWindows] = useState<Record<string, WindowInstanceState>>(createInitialWindowStates)
   const [iconPositions, setIconPositions] =
     useState<Record<DesktopIconKey, IconPosition>>(DEFAULT_ICON_POSITIONS)
   const [selectedIcon, setSelectedIcon] = useState<DesktopIconKey | null>(null)
+  // Mirrors iconPositions synchronously so drag-end collision checks always
+  // read the latest positions, independent of React's state-update timing.
+  const iconPositionsRef = useRef(iconPositions)
   const windowZRef = useRef(0)
   const bootPhaseRef = useRef(bootPhase)
   const screenPhaseRef = useRef(screenPhase)
   const cancelledRef = useRef(false)
+  const poweringOnRef = useRef(false)
   const timeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([])
   const screenRef = useRef<HTMLDivElement>(null)
   const menuTransitionRef = useRef({ from: 0, to: 0, start: 0 })
@@ -588,6 +723,16 @@ export default function CrtScreen() {
   useEffect(() => {
     const interval = setInterval(() => setCursorOn((on) => !on), 500)
     return () => clearInterval(interval)
+  }, [])
+
+  // Warm the browser cache for images used once the desktop appears (About
+  // window photos, school logos) during the boot animation, so they're
+  // already loaded by the time windows can open.
+  useEffect(() => {
+    PRELOAD_IMAGE_SRCS.forEach((src) => {
+      const img = new Image()
+      img.src = src
+    })
   }, [])
 
   useEffect(() => {
@@ -671,9 +816,23 @@ export default function CrtScreen() {
   }, [])
 
   useEffect(() => {
-    if (bootPhase !== 'ready') return
+    if (bootPhase !== 'ready' || screenPhase !== 'booting') return
 
-    const finish = () => setScreenPhase('desktop')
+    const finish = () => {
+      if (poweringOnRef.current) return
+      poweringOnRef.current = true
+      setPoweringOn(true)
+      // Swap the underlying screen content while the flash overlay is near
+      // full opacity, so the boot -> desktop cut is hidden behind the bloom
+      // instead of visible as a hard jump cut.
+      timeoutsRef.current.push(setTimeout(() => setScreenPhase('desktop'), POWER_ON_SWAP_DELAY))
+      timeoutsRef.current.push(
+        setTimeout(() => {
+          setPoweringOn(false)
+          poweringOnRef.current = false
+        }, POWER_ON_DURATION),
+      )
+    }
     window.addEventListener('keydown', finish)
     window.addEventListener('pointerdown', finish)
 
@@ -681,7 +840,7 @@ export default function CrtScreen() {
       window.removeEventListener('keydown', finish)
       window.removeEventListener('pointerdown', finish)
     }
-  }, [bootPhase])
+  }, [bootPhase, screenPhase])
 
   useEffect(() => {
     function updateRect() {
@@ -811,14 +970,16 @@ export default function CrtScreen() {
     setWindows((prev) => {
       const win = prev.about
       if (win.open && !win.minimized) return prev
-      const x =
-        screenRect.width > 0 ? (screenRect.width - win.rect.width) / 2 : win.rect.x
-      const y =
-        screenRect.height > 0 ? (screenRect.height - win.rect.height) / 2 : win.rect.y
-      return { ...prev, about: { ...win, open: true, minimized: false, rect: { ...win.rect, x, y } } }
+      return { ...prev, about: { ...win, open: true, minimized: false } }
     })
+    setWindows((prev) => {
+      const win = prev.skills
+      if (win.open && !win.minimized) return prev
+      return { ...prev, skills: { ...win, open: true, minimized: false } }
+    })
+    focusWindow('skills')
     focusWindow('about')
-  }, [screenPhase, screenRect.width, screenRect.height, focusWindow])
+  }, [screenPhase, focusWindow])
 
   const closeWindow = useCallback((key: WindowKey) => {
     setWindows((prev) => {
@@ -889,6 +1050,37 @@ export default function CrtScreen() {
     [windows, focusWindow, openWindow],
   )
 
+  const openProjectWindow = useCallback(
+    (projectId: string) => {
+      const key = projectWindowKey(projectId)
+      setWindows((prev) => {
+        const existing = prev[key]
+        if (existing) {
+          if (existing.open && !existing.minimized) return prev
+          return { ...prev, [key]: { ...existing, open: true, minimized: false } }
+        }
+        const cascadeIndex = Object.keys(prev).filter((k) => isProjectWindowKey(k)).length % 5
+        const offset = cascadeIndex * PROJECT_WINDOW_CASCADE
+        return {
+          ...prev,
+          [key]: {
+            open: true,
+            minimized: false,
+            maximized: false,
+            rect: {
+              ...PROJECT_WINDOW_DEFAULT_RECT,
+              x: PROJECT_WINDOW_DEFAULT_RECT.x + offset,
+              y: PROJECT_WINDOW_DEFAULT_RECT.y + offset,
+            },
+            z: 0,
+          },
+        }
+      })
+      focusWindow(key)
+    },
+    [focusWindow],
+  )
+
   const showPrompt = bootPhase === 'ready'
 
   const drawBoot = useCallback(
@@ -956,6 +1148,42 @@ export default function CrtScreen() {
             ctx.fillRect(PADDING_X + textWidth + 2, promptY, 12, FONT_SIZE)
           }
         }
+      }
+
+      const widthCss = width / dpr
+      const artFontSize = 15
+      const artLineHeight = artFontSize * 1.1
+      ctx.font = `${artFontSize}px monospace`
+      const artWidth = Math.max(...BOOT_ASCII_ART.map((line) => ctx.measureText(line).width))
+      if (widthCss - PADDING_X * 2 - artWidth > 200) {
+        ctx.shadowColor = 'rgba(255,255,255,0.5)'
+        ctx.fillStyle = '#ffffff'
+        const artX = widthCss - PADDING_X - artWidth
+        const artY = PADDING_Y
+
+        // Reveal the art top-to-bottom, one row at a time, in lockstep with
+        // the loading bar — same typewriter-with-cursor language as the boot
+        // lines above, so it reads as another part of the system "loading in".
+        const exactRow = (progress / 100) * BOOT_ASCII_ART.length
+        const fullRows = Math.floor(exactRow)
+        const partialFraction = exactRow - fullRows
+
+        BOOT_ASCII_ART.forEach((line, i) => {
+          if (i > fullRows) return
+          ctx.shadowBlur = cursorOn ? 4 : 2.5
+          if (i < fullRows) {
+            ctx.fillText(line, artX, artY + i * artLineHeight)
+            return
+          }
+          const chars = Math.round(line.length * partialFraction)
+          const partial = line.slice(0, chars)
+          ctx.fillText(partial, artX, artY + i * artLineHeight)
+          if (cursorOn) {
+            const partialWidth = ctx.measureText(partial).width
+            ctx.shadowBlur = 0
+            ctx.fillRect(artX + partialWidth + 1, artY + i * artLineHeight, 6, artFontSize)
+          }
+        })
       }
 
       ctx.restore()
@@ -1258,7 +1486,8 @@ export default function CrtScreen() {
 
   const windowRenderData = (Object.keys(windows) as WindowKey[]).map((key) => {
     const win = windows[key]
-    const iconHit = taskbarIconHits.find((icon) => icon.key === key)
+    const minimizeIconKey = isProjectWindowKey(key) ? 'projects' : key
+    const iconHit = taskbarIconHits.find((icon) => icon.key === minimizeIconKey)
     const minimizeTarget = iconHit
       ? { x: iconHit.x - screenRect.left, y: iconHit.y - screenRect.top }
       : { x: startHitPos.x - screenRect.left, y: startHitPos.y - screenRect.top }
@@ -1377,9 +1606,22 @@ export default function CrtScreen() {
                   containerRef={screenRef}
                   onSelect={() => setSelectedIcon(key)}
                   onOpen={() => launchWindow(key)}
-                  onPositionChange={(pos) =>
-                    setIconPositions((prev) => ({ ...prev, [key]: snapToIconGrid(pos) }))
-                  }
+                  onPositionChange={(pos) => {
+                    const prev = iconPositionsRef.current
+                    const occupied = new Set(
+                      Object.entries(prev)
+                        .filter(([otherKey]) => otherKey !== key)
+                        .map(([, otherPos]) => {
+                          const { col, row } = iconGridCell(otherPos as IconPosition)
+                          return gridCellKey(col, row)
+                        }),
+                    )
+                    const resolved = snapToIconGrid(pos, occupied) ?? prev[key]
+                    const next = { ...prev, [key]: resolved }
+                    iconPositionsRef.current = next
+                    setIconPositions(next)
+                    return resolved
+                  }}
                 >
                   <Glyph />
                 </DesktopIcon>
@@ -1388,7 +1630,7 @@ export default function CrtScreen() {
             {windowRenderData.map(({ key, win, minimizeTarget, maximizedRect }) => (
               <Window
                 key={key}
-                title={WINDOW_TITLES[key]}
+                title={getWindowTitle(key)}
                 isOpen={win.open}
                 isMinimized={win.minimized}
                 isMaximized={win.maximized}
@@ -1402,7 +1644,17 @@ export default function CrtScreen() {
                 onFocus={() => focusWindow(key)}
                 onRectChange={(rect) => updateWindowRect(key, rect)}
               >
-                {key === 'about' ? <AboutContent /> : <p>{WINDOW_CONTENT[key]}</p>}
+                {key === 'about' ? (
+                  <AboutContent onOpenProject={openProjectWindow} />
+                ) : key === 'contact' ? (
+                  <ContactContent />
+                ) : key === 'skills' ? (
+                  <SkillsContent />
+                ) : key === 'projects' ? (
+                  <ProjectsContent onOpenProject={openProjectWindow} />
+                ) : (
+                  <ProjectWindowContent project={getProjectById(projectIdFromKey(key))} />
+                )}
               </Window>
             ))}
           </div>
@@ -1413,6 +1665,8 @@ export default function CrtScreen() {
           <div className="crt-screen__flicker" />
           <div className="crt-screen__vignette" />
         </div>
+
+        {poweringOn && <div className="crt-screen__power-flash" aria-hidden="true" />}
       </div>
 
       {screenPhase === 'desktop' && (

@@ -1,0 +1,104 @@
+.projects-content {
+  box-sizing: border-box;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  border: 1px solid #808080;
+  border-right-color: #ffffff;
+  border-bottom-color: #ffffff;
+  box-shadow: inset 1px 1px 0 #404040;
+}
+
+.projects-content__breadcrumbs {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: #ece9d8;
+  border-bottom: 1px solid #808080;
+}
+
+.projects-breadcrumb {
+  padding: 0;
+  background: none;
+  border: none;
+  font-family: 'Jersey 10', monospace;
+  font-size: 15px;
+  color: #1a3f8f;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.projects-breadcrumb:disabled {
+  cursor: default;
+}
+
+.projects-breadcrumb--current {
+  color: #1a1a1a;
+  text-decoration: none;
+}
+
+.projects-breadcrumb__sep {
+  font-family: 'Jersey 10', monospace;
+  font-size: 15px;
+  color: #4a5568;
+}
+
+.projects-content__grid {
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 4px;
+  align-content: start;
+  padding: 10px;
+  overflow-y: auto;
+}
+
+.projects-file {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 4px;
+  cursor: default;
+  user-select: none;
+}
+
+.projects-file__icon {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  filter: drop-shadow(1px 2px 1px rgba(0, 0, 0, 0.25));
+}
+
+.projects-file__icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.projects-file--selected .projects-file__icon::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  background: rgba(49, 106, 197, 0.4);
+  mix-blend-mode: multiply;
+}
+
+.projects-file__label {
+  font-family: 'Jersey 10', monospace;
+  font-size: 14px;
+  line-height: 1.2;
+  color: #1a1a1a;
+  text-align: center;
+  word-break: break-word;
+  padding: 1px 5px;
+}
+
+.projects-file--selected .projects-file__label {
+  background: #316ac5;
+  color: #ffffff;
+  outline: 1px dotted rgba(255, 255, 255, 0.8);
+}

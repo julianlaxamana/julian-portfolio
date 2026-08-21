@@ -1,0 +1,25 @@
+.mobile-footer {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .mobile-footer {
+    display: block;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10;
+    margin: 0;
+    padding: 6px 12px;
+    text-align: center;
+    font-family: 'Jersey 10', monospace;
+    font-size: 15px;
+    line-height: 1.3;
+    color: #ffffff;
+    background: #c81e1e;
+    box-shadow: none;
+    border-radius: 0;
+    pointer-events: none;
+  }
+}

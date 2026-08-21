@@ -238,6 +238,68 @@
   margin-top: 8px;
 }
 
+.about-edu-item {
+  display: flex;
+  gap: 10px;
+}
+
+.about-edu-item:not(:last-child) .about-edu-item__body {
+  padding-bottom: 14px;
+}
+
+.about-edu-item__rail {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.about-edu-item__rail::after {
+  content: '';
+  flex: 1 1 auto;
+  width: 2px;
+  margin-top: 2px;
+  background: #c4c4c4;
+}
+
+.about-edu-item:last-child .about-edu-item__rail::after {
+  display: none;
+}
+
+.about-edu-item__icon {
+  position: relative;
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #eaeaea;
+  border: 1px solid #c4c4c4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.about-edu-item__icon img {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+  border-radius: 50%;
+}
+
+.about-edu-item__body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.about-edu-item__info {
+  min-width: 0;
+}
+
 .about-section__meta {
   margin: 2px 0 0;
   font-family: 'Jersey 10', monospace;
@@ -245,14 +307,173 @@
   color: #4a5568;
 }
 
-.about-section__list {
-  margin: 0;
-  padding-left: 22px;
+.about-section__years {
+  flex: 0 0 auto;
+  margin: 3px 0 0;
   font-family: 'Jersey 10', monospace;
-  font-size: 19px;
+  font-size: 14px;
+  color: #8a8f98;
+  white-space: nowrap;
+}
+
+.about-projects {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.about-projects__arrow {
+  flex: 0 0 auto;
+  align-self: center;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #d4d0c8;
+  border: 1px solid #ffffff;
+  border-right-color: #808080;
+  border-bottom-color: #808080;
+  font-family: 'Jersey 10', monospace;
+  font-size: 20px;
+  line-height: 1;
+  color: #1a1a1a;
+  cursor: pointer;
+}
+
+.about-projects__arrow:hover {
+  background: #e4e0d8;
+}
+
+.about-projects__arrow:active {
+  border-color: #808080;
+  border-right-color: #ffffff;
+  border-bottom-color: #ffffff;
+  transform: translate(1px, 1px);
+}
+
+.about-project {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  gap: 12px;
+  padding: 8px;
+  background: #ffffff;
+  border: 1px solid #808080;
+  border-right-color: #ffffff;
+  border-bottom-color: #ffffff;
+  box-shadow: inset 1px 1px 0 #404040;
+}
+
+.about-project__image {
+  flex: 0 0 auto;
+  width: 96px;
+  height: 96px;
+  object-fit: cover;
+  background: #eaeaea;
+  border: 1px solid #c4c4c4;
+}
+
+.about-project__image--placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: repeating-linear-gradient(
+    45deg,
+    #eaeaea,
+    #eaeaea 8px,
+    #e0ddd4 8px,
+    #e0ddd4 16px
+  );
+}
+
+.about-project__image--placeholder svg {
+  width: 30px;
+  height: 30px;
+  fill: #a8a29a;
+}
+
+.about-project__body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.about-project__title {
+  margin: 0;
+  font-family: 'Jersey 10', monospace;
+  font-size: 20px;
   color: #1a1a1a;
 }
 
-.about-section__list li + li {
+.about-project__description {
+  margin: 0;
+  font-family: 'Jersey 10', monospace;
+  font-size: 15px;
+  line-height: 1.25;
+  color: #4a5568;
+}
+
+.about-project__tags {
+  margin-top: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 4px;
+}
+
+.about-project__tag {
+  padding: 1px 8px;
+  background: #d4d0c8;
+  border: 1px solid #ffffff;
+  border-right-color: #808080;
+  border-bottom-color: #808080;
+  font-family: 'Jersey 10', monospace;
+  font-size: 13px;
+  color: #1a1a1a;
+}
+
+.about-project__open {
+  align-self: flex-start;
   margin-top: 6px;
+  padding: 3px 10px;
+  background: #d4d0c8;
+  border: 1px solid #ffffff;
+  border-right-color: #808080;
+  border-bottom-color: #808080;
+  font-family: 'Jersey 10', monospace;
+  font-size: 14px;
+  color: #1a1a1a;
+  cursor: pointer;
+}
+
+.about-project__open:hover {
+  background: #e4e0d8;
+}
+
+.about-project__open:active {
+  border-color: #808080;
+  border-right-color: #ffffff;
+  border-bottom-color: #ffffff;
+  transform: translate(1px, 1px);
+}
+
+.about-projects__dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.about-projects__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #c4c4c4;
+}
+
+.about-projects__dot--active {
+  background: #4a5568;
 }
