@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import CrtShaderCanvas from './CrtShaderCanvas'
 import Window, { getWindowControlCenters, WINDOW_BUTTON_SIZE, type Point, type WindowRect } from './Window'
 import DesktopIcon, { type IconPosition } from './DesktopIcon'
@@ -406,7 +406,7 @@ const DESKTOP_ICON_CONFIG: { key: DesktopIconKey; label: string }[] = [
   { key: 'projects', label: 'Projects' },
 ]
 
-const DESKTOP_ICON_GLYPHS: Record<DesktopIconKey, () => JSX.Element> = {
+const DESKTOP_ICON_GLYPHS: Record<DesktopIconKey, () => ReactElement> = {
   about: AboutIconGlyph,
   projects: ProjectsIconGlyph,
 }
