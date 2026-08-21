@@ -7,23 +7,38 @@ const LINE_HEIGHT = FONT_SIZE * 1.5
 const PADDING_X = 32
 const PADDING_Y = 28
 const BOOT_BG_COLOR: [number, number, number] = [5 / 255, 7 / 255, 10 / 255]
-const DESKTOP_BG_COLOR: [number, number, number] = [0, 128 / 255, 128 / 255]
+const DESKTOP_BG_COLOR: [number, number, number] = [245 / 255, 196 / 255, 0]
 
 const TASKBAR_HEIGHT = 40
 const BAR_PADDING = 10
 const START_PADDING_X = 10
 const START_WIDTH = 88
-const START_HEIGHT = 30
+const START_HEIGHT = TASKBAR_HEIGHT
 const GAP = 8
 const DIVIDER_WIDTH = 2
 const TRAY_WIDTH = 90
 const TRAY_HEIGHT = 26
 
-const START_X = BAR_PADDING
-const START_Y = (TASKBAR_HEIGHT - START_HEIGHT) / 2
+const START_X = 0
+const START_Y = 0
 const DIVIDER_X = START_X + START_WIDTH + GAP
 const DIVIDER_Y = (TASKBAR_HEIGHT - 28) / 2
 const TRAY_Y = (TASKBAR_HEIGHT - TRAY_HEIGHT) / 2
+
+const MENU_WIDTH = 230
+const MENU_ITEM_HEIGHT = 44
+const MENU_PADDING = 8
+const MENU_ITEMS: { label: string; href: string }[] = [
+  { label: 'About', href: '#about' },
+  { label: 'Projects', href: '#projects' },
+  { label: 'Contact', href: '#contact' },
+]
+const MENU_HEIGHT = MENU_ITEMS.length * MENU_ITEM_HEIGHT + MENU_PADDING * 2
+const MENU_ANIM_DURATION = 220
+
+function easeOutExpo(t: number) {
+  return t >= 1 ? 1 : 1 - Math.pow(2, -10 * t)
+}
 
 type Line = { text: string; delayAfter?: number }
 
@@ -144,13 +159,23 @@ function drawBevel(
   h: number,
   raised: boolean,
 ) {
-  const edge = Math.max(1, Math.round(2))
-  ctx.fillStyle = raised ? '#ffffff' : '#000000'
-  ctx.fillRect(x, y, w, edge)
-  ctx.fillRect(x, y, edge, h)
-  ctx.fillStyle = raised ? '#000000' : '#ffffff'
-  ctx.fillRect(x, y + h - edge, w, edge)
-  ctx.fillRect(x + w - edge, y, edge, h)
+  const highlight = 'rgba(255, 255, 255, 0.75)'
+  const shadow = 'rgba(23, 55, 92, 0.3)'
+
+  ctx.strokeStyle = raised ? highlight : shadow
+  ctx.lineWidth = 1
+  ctx.beginPath()
+  ctx.moveTo(x + 0.5, y + h - 0.5)
+  ctx.lineTo(x + 0.5, y + 0.5)
+  ctx.lineTo(x + w - 0.5, y + 0.5)
+  ctx.stroke()
+
+  ctx.strokeStyle = raised ? shadow : highlight
+  ctx.beginPath()
+  ctx.moveTo(x + w - 0.5, y + 0.5)
+  ctx.lineTo(x + w - 0.5, y + h - 0.5)
+  ctx.lineTo(x + 0.5, y + h - 0.5)
+  ctx.stroke()
 }
 
 export default function CrtScreen() {
@@ -161,12 +186,22 @@ export default function CrtScreen() {
   const [cursorOn, setCursorOn] = useState(true)
   const [startOpen, setStartOpen] = useState(false)
   const [startHitPos, setStartHitPos] = useState({ x: START_X + START_WIDTH / 2, y: START_Y + START_HEIGHT / 2 })
+  const [menuItemHits, setMenuItemHits] = useState<
+    { label: string; href: string; x: number; y: number }[]
+  >([])
+  const [hoveredMenuIndex, setHoveredMenuIndex] = useState<number | null>(null)
   const [screenRect, setScreenRect] = useState({ width: 0, height: 0, left: 0, top: 0 })
   const bootPhaseRef = useRef(bootPhase)
   const screenPhaseRef = useRef(screenPhase)
   const cancelledRef = useRef(false)
   const timeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([])
   const screenRef = useRef<HTMLDivElement>(null)
+  const menuTransitionRef = useRef({ from: 0, to: 0, start: 0 })
+  const menuTRef = useRef(0)
+  const halftoneRef = useRef<{ dpr: number; pattern: CanvasPattern | null }>({
+    dpr: 0,
+    pattern: null,
+  })
 
   useEffect(() => {
     bootPhaseRef.current = bootPhase
@@ -306,12 +341,43 @@ export default function CrtScreen() {
         x: rect.left + wx * rect.width,
         y: rect.top + wy * rect.height,
       })
+
+      // Menu items are drawn directly into the warped taskbar canvas layer
+      // (see drawStartMenu), so their click targets are found the same way
+      // as the Start button: warp each item's pre-warp center point.
+      const menuTopY = barY - MENU_HEIGHT
+      const itemCenterX = START_X + MENU_WIDTH / 2
+      const hits = MENU_ITEMS.map((item, i) => {
+        const itemCenterY = menuTopY + MENU_PADDING + i * MENU_ITEM_HEIGHT + MENU_ITEM_HEIGHT / 2
+        const [ix, iy] = inverseWarp(
+          itemCenterX / rect.width,
+          itemCenterY / rect.height,
+          aspect,
+          DESKTOP_STRENGTH,
+        )
+        return {
+          label: item.label,
+          href: item.href,
+          x: rect.left + ix * rect.width,
+          y: rect.top + iy * rect.height,
+        }
+      })
+      setMenuItemHits(hits)
     }
 
     updateHitPos()
     window.addEventListener('resize', updateHitPos)
     return () => window.removeEventListener('resize', updateHitPos)
   }, [screenPhase])
+
+  useEffect(() => {
+    menuTransitionRef.current = {
+      from: menuTRef.current,
+      to: startOpen ? 1 : 0,
+      start: performance.now(),
+    }
+    if (!startOpen) setHoveredMenuIndex(null)
+  }, [startOpen])
 
   const showPrompt = bootPhase === 'ready'
 
@@ -389,13 +455,21 @@ export default function CrtScreen() {
 
   const drawTaskbar = useCallback(
     (ctx: CanvasRenderingContext2D, widthCss: number, barY: number, startActive: boolean) => {
-      ctx.fillStyle = '#c0c0c0'
+      const barGradient = ctx.createLinearGradient(0, barY, 0, barY + TASKBAR_HEIGHT)
+      barGradient.addColorStop(0, '#bfe3ff')
+      barGradient.addColorStop(0.45, '#8fc9f7')
+      barGradient.addColorStop(1, '#5aa3e8')
+      ctx.fillStyle = barGradient
       ctx.fillRect(0, barY, widthCss, TASKBAR_HEIGHT)
-      ctx.fillStyle = '#ffffff'
+      ctx.fillStyle = '#e8f5ff'
       ctx.fillRect(0, barY, widthCss, 2)
 
       const startY = barY + START_Y
-      ctx.fillStyle = '#c0c0c0'
+      const startGradient = ctx.createLinearGradient(0, startY, 0, startY + START_HEIGHT)
+      startGradient.addColorStop(0, '#a3e386')
+      startGradient.addColorStop(0.45, '#77c455')
+      startGradient.addColorStop(1, '#4f9c37')
+      ctx.fillStyle = startGradient
       ctx.fillRect(START_X, startY, START_WIDTH, START_HEIGHT)
       drawBevel(ctx, START_X, startY, START_WIDTH, START_HEIGHT, !startActive)
 
@@ -412,8 +486,8 @@ export default function CrtScreen() {
       ctx.fillStyle = '#ffb900'
       ctx.fillRect(logoX + cell + 1, logoY + cell + 1, cell, cell)
 
-      ctx.fillStyle = '#000000'
-      ctx.font = 'bold 14px ui-monospace, "Courier New", Consolas, monospace'
+      ctx.fillStyle = '#ffffff'
+      ctx.font = '18px "Jersey 10", monospace'
       ctx.textBaseline = 'middle'
       ctx.fillText(
         'Start',
@@ -429,12 +503,12 @@ export default function CrtScreen() {
 
       const trayX = widthCss - BAR_PADDING - TRAY_WIDTH
       const trayY = barY + TRAY_Y
-      ctx.fillStyle = '#c0c0c0'
+      ctx.fillStyle = '#cfe8fb'
       ctx.fillRect(trayX, trayY, TRAY_WIDTH, TRAY_HEIGHT)
       drawBevel(ctx, trayX, trayY, TRAY_WIDTH, TRAY_HEIGHT, false)
 
       ctx.fillStyle = '#000000'
-      ctx.font = '14px ui-monospace, "Courier New", Consolas, monospace'
+      ctx.font = '18px "Jersey 10", monospace'
       ctx.textAlign = 'center'
       ctx.fillText(formatTime(new Date()), trayX + TRAY_WIDTH / 2, trayY + TRAY_HEIGHT / 2 + 1)
       ctx.textAlign = 'left'
@@ -448,28 +522,145 @@ export default function CrtScreen() {
       ctx.fillStyle = `rgb(${DESKTOP_BG_COLOR[0] * 255}, ${DESKTOP_BG_COLOR[1] * 255}, ${DESKTOP_BG_COLOR[2] * 255})`
       ctx.fillRect(0, 0, width, height)
 
-      const gridSize = 48 * dpr
-      ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)'
-      ctx.lineWidth = 1
-      ctx.beginPath()
-      for (let x = 0; x <= width; x += gridSize) {
-        ctx.moveTo(x, 0)
-        ctx.lineTo(x, height)
+      // Halftone dot texture (cached as a repeating pattern for perf),
+      // radially masked so it fades out toward the edges.
+      let halftone = halftoneRef.current
+      if (halftone.dpr !== dpr || !halftone.pattern) {
+        const tile = Math.max(1, Math.round(11 * dpr))
+        const tileCanvas = document.createElement('canvas')
+        tileCanvas.width = tile
+        tileCanvas.height = tile
+        const tctx = tileCanvas.getContext('2d')
+        if (tctx) {
+          tctx.fillStyle = 'rgba(222, 172, 20, 0.5)'
+          tctx.beginPath()
+          tctx.arc(tile / 2, tile / 2, Math.max(1, tile * 0.22), 0, Math.PI * 2)
+          tctx.fill()
+        }
+        halftone = { dpr, pattern: ctx.createPattern(tileCanvas, 'repeat') }
+        halftoneRef.current = halftone
       }
-      for (let y = 0; y <= height; y += gridSize) {
-        ctx.moveTo(0, y)
-        ctx.lineTo(width, y)
-      }
-      ctx.stroke()
+      if (halftone.pattern) {
+        ctx.fillStyle = halftone.pattern
+        ctx.fillRect(0, 0, width, height)
 
+        const bgR = DESKTOP_BG_COLOR[0] * 255
+        const bgG = DESKTOP_BG_COLOR[1] * 255
+        const bgB = DESKTOP_BG_COLOR[2] * 255
+        const cx = width / 2
+        const cy = height / 2
+        const radius = Math.hypot(cx, cy)
+        const fade = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius)
+        fade.addColorStop(0, `rgba(${bgR}, ${bgG}, ${bgB}, 0)`)
+        fade.addColorStop(0.5, `rgba(${bgR}, ${bgG}, ${bgB}, 0)`)
+        fade.addColorStop(1, `rgba(${bgR}, ${bgG}, ${bgB}, 1)`)
+        ctx.fillStyle = fade
+        ctx.fillRect(0, 0, width, height)
+      }
+
+      // Persona 4-esque diagonal rainbow stripe band
+      ctx.save()
+      ctx.translate(width / 2, height / 2)
+      ctx.rotate((-14 * Math.PI) / 180)
+      const diag = Math.hypot(width, height)
+      const unit = 6 * dpr
+      const stripes: { color: string; weight: number }[] = [
+        { color: '#ffffff', weight: 1 },
+        { color: '#e2231a', weight: 1.4 },
+        { color: '#f6c700', weight: 2.2 },
+        { color: '#f39200', weight: 3 },
+        { color: '#375e2f', weight: 1.2 },
+        { color: '#8dc63f', weight: 1.6 },
+        { color: '#4fc3e8', weight: 4 },
+        { color: '#f6e400', weight: 1.6 },
+        { color: '#7a6a23', weight: 1.2 },
+        { color: '#e2231a', weight: 1 },
+      ]
+      let offset = height * 0.1
+      for (const stripe of stripes) {
+        const thickness = stripe.weight * unit
+        ctx.fillStyle = stripe.color
+        ctx.fillRect(-diag / 2, offset, diag, thickness)
+        offset += thickness
+      }
+      ctx.restore()
+    },
+    [],
+  )
+
+  const drawStartMenu = useCallback(
+    (ctx: CanvasRenderingContext2D, barY: number, t: number, hoveredIndex: number | null) => {
+      if (t <= 0.001) return
+      const menuTopY = barY - MENU_HEIGHT
+      const slide = (1 - t) * (MENU_HEIGHT + 12)
+      const y = menuTopY + slide
+
+      ctx.save()
+      ctx.globalAlpha = t
+
+      const grad = ctx.createLinearGradient(0, y, 0, y + MENU_HEIGHT)
+      grad.addColorStop(0, '#eaf6ff')
+      grad.addColorStop(1, '#bfe0f7')
+      ctx.fillStyle = grad
+      ctx.fillRect(START_X, y, MENU_WIDTH, MENU_HEIGHT)
+
+      if (hoveredIndex !== null) {
+        const itemY = y + MENU_PADDING + hoveredIndex * MENU_ITEM_HEIGHT
+        ctx.fillStyle = 'rgba(23, 55, 92, 0.15)'
+        ctx.fillRect(START_X + 2, itemY, MENU_WIDTH - 4, MENU_ITEM_HEIGHT)
+      }
+
+      ctx.strokeStyle = 'rgba(23, 55, 92, 0.2)'
+      ctx.lineWidth = 1
+      for (let i = 1; i < MENU_ITEMS.length; i++) {
+        const dividerY = Math.round(y + MENU_PADDING + i * MENU_ITEM_HEIGHT) + 0.5
+        ctx.beginPath()
+        ctx.moveTo(START_X + MENU_PADDING + 4, dividerY)
+        ctx.lineTo(START_X + MENU_WIDTH - MENU_PADDING - 4, dividerY)
+        ctx.stroke()
+      }
+
+      ctx.strokeStyle = 'rgba(23, 55, 92, 0.35)'
+      ctx.strokeRect(START_X + 0.5, y + 0.5, MENU_WIDTH - 1, MENU_HEIGHT - 1)
+
+      ctx.font = '20px "Jersey 10", monospace'
+      ctx.fillStyle = '#143a63'
+      ctx.textBaseline = 'middle'
+      MENU_ITEMS.forEach((item, i) => {
+        const itemY = y + MENU_PADDING + i * MENU_ITEM_HEIGHT + MENU_ITEM_HEIGHT / 2
+        ctx.fillText(item.label, START_X + MENU_PADDING + 12, itemY + 1)
+      })
+
+      ctx.restore()
+    },
+    [],
+  )
+
+  // Rendered as its own warped layer, stacked above the desktop, so the
+  // taskbar always visually sits in front of the Start menu instead of the
+  // menu covering it. The menu is drawn into this same canvas (rather than
+  // as a separate DOM overlay) so it goes through the same WebGL curvature
+  // warp as everything else on the "screen".
+  const drawTaskbarLayer = useCallback(
+    (ctx: CanvasRenderingContext2D, width: number, height: number, dpr: number) => {
+      ctx.clearRect(0, 0, width, height)
       ctx.save()
       ctx.scale(dpr, dpr)
       const widthCss = width / dpr
       const heightCss = height / dpr
-      drawTaskbar(ctx, widthCss, heightCss - TASKBAR_HEIGHT, startOpen)
+      const barY = heightCss - TASKBAR_HEIGHT
+
+      const { from, to, start } = menuTransitionRef.current
+      const elapsed = performance.now() - start
+      const raw = Math.min(1, Math.max(0, elapsed / MENU_ANIM_DURATION))
+      const eased = easeOutExpo(raw)
+      menuTRef.current = from + (to - from) * eased
+
+      drawStartMenu(ctx, barY, menuTRef.current, hoveredMenuIndex)
+      drawTaskbar(ctx, widthCss, barY, startOpen)
       ctx.restore()
     },
-    [drawTaskbar, startOpen],
+    [drawTaskbar, drawStartMenu, startOpen, hoveredMenuIndex],
   )
 
   const draw = useCallback(
@@ -499,7 +690,6 @@ export default function CrtScreen() {
       <div
         ref={screenRef}
         className={`crt-screen ${screenPhase === 'booting' ? 'crt-screen--booting' : 'crt-screen--desktop'}`}
-        aria-hidden="true"
         style={hasRect ? { clipPath: `path("${pathD}")` } : undefined}
       >
         <CrtShaderCanvas
@@ -508,27 +698,25 @@ export default function CrtScreen() {
           strength={strength}
           className="crt-screen__canvas"
         />
-        <div className="crt-screen__scanlines" />
-        <div className="crt-screen__flicker" />
-        <div className="crt-screen__vignette" />
+
+        {screenPhase === 'desktop' && (
+          <CrtShaderCanvas
+            draw={drawTaskbarLayer}
+            bgColor={bgColor}
+            strength={strength}
+            className="crt-screen__canvas"
+          />
+        )}
+
+        <div className="crt-screen__overlay" aria-hidden="true">
+          <div className="crt-screen__scanlines" />
+          <div className="crt-screen__flicker" />
+          <div className="crt-screen__vignette" />
+        </div>
       </div>
 
       {screenPhase === 'desktop' && (
         <div className="taskbar-hit">
-          {startOpen && (
-            <div
-              className="taskbar-hit__start-menu"
-              style={{
-                left: startHitPos.x - START_WIDTH / 2,
-                top: startHitPos.y - START_HEIGHT / 2 - 4,
-                transform: 'translateY(-100%)',
-              }}
-            >
-              <a href="#about">About</a>
-              <a href="#projects">Projects</a>
-              <a href="#contact">Contact</a>
-            </div>
-          )}
           <button
             type="button"
             className="taskbar-hit__start"
@@ -536,9 +724,33 @@ export default function CrtScreen() {
             style={{
               left: startHitPos.x - START_WIDTH / 2,
               top: startHitPos.y - START_HEIGHT / 2,
+              width: START_WIDTH,
+              height: START_HEIGHT,
             }}
             onClick={() => setStartOpen((open) => !open)}
           />
+        </div>
+      )}
+
+      {screenPhase === 'desktop' && startOpen && (
+        <div className="start-menu-hit">
+          {menuItemHits.map((item, i) => (
+            <a
+              key={item.href}
+              href={item.href}
+              className="start-menu-hit__item"
+              style={{
+                left: item.x - MENU_WIDTH / 2,
+                top: item.y - MENU_ITEM_HEIGHT / 2,
+                width: MENU_WIDTH - MENU_PADDING * 2,
+                height: MENU_ITEM_HEIGHT,
+              }}
+              aria-label={item.label}
+              onClick={() => setStartOpen(false)}
+              onMouseEnter={() => setHoveredMenuIndex(i)}
+              onMouseLeave={() => setHoveredMenuIndex((cur) => (cur === i ? null : cur))}
+            />
+          ))}
         </div>
       )}
     </>

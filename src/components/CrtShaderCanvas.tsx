@@ -95,7 +95,7 @@ export default function CrtShaderCanvas({
     const glCanvas = glCanvasRef.current
     if (!glCanvas) return
 
-    const gl = glCanvas.getContext('webgl')
+    const gl = glCanvas.getContext('webgl', { alpha: true, premultipliedAlpha: false })
     if (!gl) return
 
     const sourceCanvas = document.createElement('canvas')

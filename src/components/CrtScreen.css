@@ -49,6 +49,10 @@
   display: none;
 }
 
+.crt-screen__overlay {
+  pointer-events: none;
+}
+
 .crt-screen__vignette {
   position: absolute;
   inset: 0;
@@ -93,8 +97,6 @@
 
 .taskbar-hit__start {
   position: absolute;
-  width: 74px;
-  height: 30px;
   background: transparent;
   border: none;
   padding: 0;
@@ -102,29 +104,19 @@
   pointer-events: auto;
 }
 
-.taskbar-hit__start-menu {
+.start-menu-hit {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  pointer-events: none;
+}
+
+.start-menu-hit__item {
   position: absolute;
-  pointer-events: auto;
-  display: flex;
-  flex-direction: column;
-  min-width: 160px;
-  background: #c0c0c0;
-  border: 2px solid;
-  border-color: #ffffff #000000 #000000 #ffffff;
-  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.4);
-  padding: 4px;
-  font-family: ui-monospace, 'Courier New', Consolas, monospace;
-  font-size: 14px;
-}
-
-.taskbar-hit__start-menu a {
-  color: #000;
+  display: block;
+  background: transparent;
+  color: transparent;
   text-decoration: none;
-  font: inherit;
-  padding: 6px 10px;
-}
-
-.taskbar-hit__start-menu a:hover {
-  background: #000080;
-  color: #fff;
+  cursor: pointer;
+  pointer-events: auto;
 }
