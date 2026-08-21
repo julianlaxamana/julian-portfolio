@@ -2,7 +2,7 @@
   position: absolute;
   top: 0;
   left: 0;
-  width: 84px;
+  width: 96px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -15,8 +15,8 @@
 
 .desktop-icon__glyph {
   position: relative;
-  width: 48px;
-  height: 48px;
+  width: 56px;
+  height: 56px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -38,7 +38,7 @@
 
 .desktop-icon__label {
   font-family: 'Jersey 10', monospace;
-  font-size: 15px;
+  font-size: 17px;
   line-height: 1.2;
   color: #ffffff;
   text-align: center;

@@ -48,7 +48,7 @@
 
 .window__title {
   font-family: 'Jersey 10', monospace;
-  font-size: 17px;
+  font-size: 19px;
   letter-spacing: 0.02em;
   white-space: nowrap;
   overflow: hidden;
@@ -58,13 +58,13 @@
 .window__controls {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   flex: 0 0 auto;
 }
 
 .window__button {
-  width: 28px;
-  height: 26px;
+  width: 32px;
+  height: 30px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -78,8 +78,8 @@
 }
 
 .window__button svg {
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
   fill: currentColor;
 }
 
@@ -102,8 +102,8 @@
   background: #ece9d8;
   color: #1a1a1a;
   font-family: 'Jersey 10', monospace;
-  font-size: 18px;
-  padding: 14px;
+  font-size: 20px;
+  padding: 16px;
 }
 
 .window__crt-overlay {

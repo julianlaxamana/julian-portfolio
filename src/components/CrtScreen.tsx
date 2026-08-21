@@ -5,43 +5,47 @@ import DesktopIcon, { type IconPosition } from './DesktopIcon'
 import AboutContent from './AboutContent'
 import './CrtScreen.css'
 
-const FONT_SIZE = 28
+const FONT_SIZE = 30
 const LINE_HEIGHT = FONT_SIZE * 1.5
-const PADDING_X = 32
-const PADDING_Y = 28
+const PADDING_X = 36
+const PADDING_Y = 32
 const BOOT_BG_COLOR: [number, number, number] = [5 / 255, 7 / 255, 10 / 255]
 const DESKTOP_BG_COLOR: [number, number, number] = [245 / 255, 196 / 255, 0]
 
-const TASKBAR_HEIGHT = 40
-const BAR_PADDING = 10
-const START_PADDING_X = 10
-const START_WIDTH = 88
+const TASKBAR_HEIGHT = 46
+const BAR_PADDING = 12
+const START_PADDING_X = 12
+const START_WIDTH = 100
 const START_HEIGHT = TASKBAR_HEIGHT
-const GAP = 8
+const GAP = 10
 const DIVIDER_WIDTH = 2
-const TRAY_WIDTH = 90
-const TRAY_HEIGHT = 26
+const DIVIDER_HEIGHT = 32
+const TRAY_WIDTH = 104
+const TRAY_HEIGHT = 30
+const SOUND_ICON_SIZE = 22
+const SOUND_ICON_GAP = 14
 
 const START_X = 0
 const START_Y = 0
 const DIVIDER_X = START_X + START_WIDTH + GAP
-const DIVIDER_Y = (TASKBAR_HEIGHT - 28) / 2
+const DIVIDER_Y = (TASKBAR_HEIGHT - DIVIDER_HEIGHT) / 2
 const TRAY_Y = (TASKBAR_HEIGHT - TRAY_HEIGHT) / 2
 
 const TASKBAR_ICONS: { key: string; label: string; href: string }[] = [
   { key: 'about', label: 'About', href: '#about' },
   { key: 'projects', label: 'Projects', href: '#projects' },
+  { key: 'contact', label: 'Contact', href: '#contact' },
 ]
-const ICON_BUTTON_SIZE = 34
-const ICON_GAP = 10
+const ICON_BUTTON_SIZE = 40
+const ICON_GAP = 12
 const ICONS_X = DIVIDER_X + DIVIDER_WIDTH + GAP + 4
 const ICONS_Y = (TASKBAR_HEIGHT - ICON_BUTTON_SIZE) / 2
-const TOOLTIP_GAP = 10
-const TOOLTIP_HEIGHT = 24
-const TOOLTIP_PADDING_X = 10
+const TOOLTIP_GAP = 12
+const TOOLTIP_HEIGHT = 26
+const TOOLTIP_PADDING_X = 12
 
 type WindowKey = 'about' | 'projects' | 'contact'
-type DesktopIconKey = 'about' | 'projects'
+type DesktopIconKey = 'about' | 'projects' | 'contact'
 
 type WindowInstanceState = {
   open: boolean
@@ -65,9 +69,9 @@ const WINDOW_CONTENT: Record<WindowKey, string> = {
 }
 
 const DEFAULT_WINDOW_RECT: Record<WindowKey, WindowRect> = {
-  about: { x: 90, y: 60, width: 500, height: 320 },
-  projects: { x: 150, y: 110, width: 540, height: 360 },
-  contact: { x: 200, y: 90, width: 460, height: 280 },
+  about: { x: 90, y: 60, width: 560, height: 360 },
+  projects: { x: 150, y: 110, width: 600, height: 400 },
+  contact: { x: 200, y: 90, width: 520, height: 320 },
 }
 
 function createInitialWindowStates(): Record<WindowKey, WindowInstanceState> {
@@ -80,9 +84,12 @@ function createInitialWindowStates(): Record<WindowKey, WindowInstanceState> {
   ) as Record<WindowKey, WindowInstanceState>
 }
 
-const MENU_WIDTH = 230
-const MENU_ITEM_HEIGHT = 44
-const MENU_PADDING = 8
+const MENU_WIDTH = 260
+const MENU_ITEM_HEIGHT = 50
+const MENU_PADDING = 10
+const MENU_ICON_SIZE = 26
+const MENU_ICON_LEFT = MENU_PADDING + 6
+const MENU_TEXT_LEFT = MENU_ICON_LEFT + MENU_ICON_SIZE + 10
 const MENU_ITEMS: { label: string; href: string }[] = [
   { label: 'About', href: '#about' },
   { label: 'Projects', href: '#projects' },
@@ -376,12 +383,41 @@ function drawProjectsIcon(ctx: CanvasRenderingContext2D, x: number, y: number, s
   ctx.strokeRect(fx + 0.5, fy + 0.5, w - 1, h - 1)
 }
 
+function drawContactIcon(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
+  const w = size * 0.74
+  const h = size * 0.52
+  const fx = x + (size - w) / 2
+  const fy = y + (size - h) / 2
+
+  ctx.fillStyle = '#ffce3d'
+  ctx.fillRect(fx, fy, w, h)
+  ctx.strokeStyle = '#8a6d1a'
+  ctx.lineWidth = 1
+  ctx.strokeRect(fx + 0.5, fy + 0.5, w - 1, h - 1)
+
+  ctx.beginPath()
+  ctx.moveTo(fx, fy)
+  ctx.lineTo(fx + w / 2, fy + h * 0.58)
+  ctx.lineTo(fx + w, fy)
+  ctx.stroke()
+}
+
 const TASKBAR_ICON_DRAWERS: Record<
   string,
   (ctx: CanvasRenderingContext2D, x: number, y: number, size: number) => void
 > = {
   about: drawAboutIcon,
   projects: drawProjectsIcon,
+  contact: drawContactIcon,
+}
+
+const MENU_ICON_DRAWERS: Record<
+  string,
+  (ctx: CanvasRenderingContext2D, x: number, y: number, size: number) => void
+> = {
+  '#about': drawAboutIcon,
+  '#projects': drawProjectsIcon,
+  '#contact': drawContactIcon,
 }
 
 function AboutIconGlyph() {
@@ -402,24 +438,36 @@ function ProjectsIconGlyph() {
   )
 }
 
+function ContactIconGlyph() {
+  return (
+    <svg viewBox="0 0 100 100" aria-hidden="true">
+      <rect x="13" y="30" width="74" height="52" fill="#ffce3d" stroke="#8a6d1a" strokeWidth="1" />
+      <path d="M13 30 L50 60 L87 30" fill="none" stroke="#8a6d1a" strokeWidth="3" />
+    </svg>
+  )
+}
+
 const DESKTOP_ICON_CONFIG: { key: DesktopIconKey; label: string }[] = [
   { key: 'about', label: 'About Me' },
   { key: 'projects', label: 'Projects' },
+  { key: 'contact', label: 'Contact' },
 ]
 
 const DESKTOP_ICON_GLYPHS: Record<DesktopIconKey, () => ReactElement> = {
   about: AboutIconGlyph,
   projects: ProjectsIconGlyph,
+  contact: ContactIconGlyph,
 }
 
-const DESKTOP_ICON_GAP_Y = 104
+const DESKTOP_ICON_GAP_Y = 120
 const DEFAULT_ICON_POSITIONS: Record<DesktopIconKey, IconPosition> = {
-  about: { x: 24, y: 24 },
-  projects: { x: 24, y: 24 + DESKTOP_ICON_GAP_Y },
+  about: { x: 28, y: 28 },
+  projects: { x: 28, y: 28 + DESKTOP_ICON_GAP_Y },
+  contact: { x: 28, y: 28 + DESKTOP_ICON_GAP_Y * 2 },
 }
 
-const ICON_GRID_ORIGIN: IconPosition = { x: 24, y: 24 }
-const ICON_GRID_CELL = { width: 100, height: DESKTOP_ICON_GAP_Y }
+const ICON_GRID_ORIGIN: IconPosition = { x: 28, y: 28 }
+const ICON_GRID_CELL = { width: 112, height: DESKTOP_ICON_GAP_Y }
 
 function snapToIconGrid(pos: IconPosition): IconPosition {
   const col = Math.max(0, Math.round((pos.x - ICON_GRID_ORIGIN.x) / ICON_GRID_CELL.width))
@@ -430,13 +478,52 @@ function snapToIconGrid(pos: IconPosition): IconPosition {
   }
 }
 
+function drawSoundIcon(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  size: number,
+  muted: boolean,
+) {
+  ctx.fillStyle = '#ffffff'
+  ctx.beginPath()
+  ctx.moveTo(x + size * 0.08, y + size * 0.35)
+  ctx.lineTo(x + size * 0.34, y + size * 0.35)
+  ctx.lineTo(x + size * 0.56, y + size * 0.14)
+  ctx.lineTo(x + size * 0.56, y + size * 0.86)
+  ctx.lineTo(x + size * 0.34, y + size * 0.65)
+  ctx.lineTo(x + size * 0.08, y + size * 0.65)
+  ctx.closePath()
+  ctx.fill()
+
+  if (muted) {
+    ctx.strokeStyle = '#e2231a'
+    ctx.lineWidth = 2
+    ctx.beginPath()
+    ctx.moveTo(x + size * 0.64, y + size * 0.28)
+    ctx.lineTo(x + size * 0.92, y + size * 0.72)
+    ctx.moveTo(x + size * 0.92, y + size * 0.28)
+    ctx.lineTo(x + size * 0.64, y + size * 0.72)
+    ctx.stroke()
+  } else {
+    ctx.strokeStyle = '#ffffff'
+    ctx.lineWidth = 1.5
+    ctx.beginPath()
+    ctx.arc(x + size * 0.5, y + size * 0.5, size * 0.22, -Math.PI / 4, Math.PI / 4)
+    ctx.stroke()
+    ctx.beginPath()
+    ctx.arc(x + size * 0.5, y + size * 0.5, size * 0.34, -Math.PI / 4, Math.PI / 4)
+    ctx.stroke()
+  }
+}
+
 function drawIconTooltip(
   ctx: CanvasRenderingContext2D,
   iconCenterX: number,
   iconTopY: number,
   label: string,
 ) {
-  ctx.font = '15px "Jersey 10", monospace'
+  ctx.font = '16px "Jersey 10", monospace'
   const textWidth = ctx.measureText(label).width
   const boxWidth = textWidth + TOOLTIP_PADDING_X * 2
   const boxX = iconCenterX - boxWidth / 2
@@ -469,6 +556,9 @@ export default function CrtScreen() {
     { key: string; label: string; href: string; x: number; y: number }[]
   >([])
   const [hoveredTaskbarIcon, setHoveredTaskbarIcon] = useState<string | null>(null)
+  const [muted, setMuted] = useState(false)
+  const [hoveredSound, setHoveredSound] = useState(false)
+  const [soundHitPos, setSoundHitPos] = useState({ x: 0, y: 0 })
   const [screenRect, setScreenRect] = useState({ width: 0, height: 0, left: 0, top: 0 })
   const [windows, setWindows] = useState<Record<WindowKey, WindowInstanceState>>(createInitialWindowStates)
   const [iconPositions, setIconPositions] =
@@ -667,6 +757,21 @@ export default function CrtScreen() {
         }
       })
       setTaskbarIconHits(iconHits)
+
+      // Mute button, warped the same way, positioned just left of the tray clock.
+      const trayX = rect.width - BAR_PADDING - TRAY_WIDTH
+      const soundIconX = trayX - SOUND_ICON_GAP - SOUND_ICON_SIZE
+      const soundIconY = barY + (TASKBAR_HEIGHT - SOUND_ICON_SIZE) / 2
+      const [sx, sy] = inverseWarp(
+        (soundIconX + SOUND_ICON_SIZE / 2) / rect.width,
+        (soundIconY + SOUND_ICON_SIZE / 2) / rect.height,
+        aspect,
+        DESKTOP_STRENGTH,
+      )
+      setSoundHitPos({
+        x: rect.left + sx * rect.width,
+        y: rect.top + sy * rect.height,
+      })
     }
 
     updateHitPos()
@@ -865,6 +970,8 @@ export default function CrtScreen() {
       barY: number,
       startActive: boolean,
       hoveredIcon: string | null,
+      muted: boolean,
+      hoveredSound: boolean,
     ) => {
       const barGradient = ctx.createLinearGradient(0, barY, 0, barY + TASKBAR_HEIGHT)
       barGradient.addColorStop(0, '#bfe3ff')
@@ -884,10 +991,10 @@ export default function CrtScreen() {
       ctx.fillRect(START_X, startY, START_WIDTH, START_HEIGHT)
       drawBevel(ctx, START_X, startY, START_WIDTH, START_HEIGHT, !startActive)
 
-      const logoSize = 14
+      const logoSize = 16
       const logoX = START_X + START_PADDING_X + (startActive ? 1 : 0)
       const logoY = startY + (START_HEIGHT - logoSize) / 2 + (startActive ? 1 : 0)
-      const cell = 6
+      const cell = 7
       ctx.fillStyle = '#f25022'
       ctx.fillRect(logoX, logoY, cell, cell)
       ctx.fillStyle = '#7fba00'
@@ -898,7 +1005,7 @@ export default function CrtScreen() {
       ctx.fillRect(logoX + cell + 1, logoY + cell + 1, cell, cell)
 
       ctx.fillStyle = '#ffffff'
-      ctx.font = '18px "Jersey 10", monospace'
+      ctx.font = '20px "Jersey 10", monospace'
       ctx.textBaseline = 'middle'
       ctx.fillText(
         'Start',
@@ -908,9 +1015,9 @@ export default function CrtScreen() {
 
       const dividerY = barY + DIVIDER_Y
       ctx.fillStyle = '#808080'
-      ctx.fillRect(DIVIDER_X, dividerY, 1, 28)
+      ctx.fillRect(DIVIDER_X, dividerY, 1, DIVIDER_HEIGHT)
       ctx.fillStyle = '#ffffff'
-      ctx.fillRect(DIVIDER_X + 1, dividerY, 1, 28)
+      ctx.fillRect(DIVIDER_X + 1, dividerY, 1, DIVIDER_HEIGHT)
 
       TASKBAR_ICONS.forEach((icon, i) => {
         const iconX = ICONS_X + i * (ICON_BUTTON_SIZE + ICON_GAP)
@@ -928,12 +1035,22 @@ export default function CrtScreen() {
 
       const trayX = widthCss - BAR_PADDING - TRAY_WIDTH
       const trayY = barY + TRAY_Y
+
+      const soundIconX = trayX - SOUND_ICON_GAP - SOUND_ICON_SIZE
+      const soundIconY = barY + (TASKBAR_HEIGHT - SOUND_ICON_SIZE) / 2
+      if (hoveredSound) {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.3)'
+        ctx.fillRect(soundIconX - 4, soundIconY - 4, SOUND_ICON_SIZE + 8, SOUND_ICON_SIZE + 8)
+        drawBevel(ctx, soundIconX - 4, soundIconY - 4, SOUND_ICON_SIZE + 8, SOUND_ICON_SIZE + 8, true)
+      }
+      drawSoundIcon(ctx, soundIconX, soundIconY, SOUND_ICON_SIZE, muted)
+
       ctx.fillStyle = '#cfe8fb'
       ctx.fillRect(trayX, trayY, TRAY_WIDTH, TRAY_HEIGHT)
       drawBevel(ctx, trayX, trayY, TRAY_WIDTH, TRAY_HEIGHT, false)
 
       ctx.fillStyle = '#000000'
-      ctx.font = '18px "Jersey 10", monospace'
+      ctx.font = '20px "Jersey 10", monospace'
       ctx.textAlign = 'center'
       ctx.fillText(formatTime(new Date()), trayX + TRAY_WIDTH / 2, trayY + TRAY_HEIGHT / 2 + 1)
       ctx.textAlign = 'left'
@@ -1048,12 +1165,18 @@ export default function CrtScreen() {
       ctx.strokeStyle = 'rgba(23, 55, 92, 0.35)'
       ctx.strokeRect(START_X + 0.5, y + 0.5, MENU_WIDTH - 1, MENU_HEIGHT - 1)
 
-      ctx.font = '20px "Jersey 10", monospace'
-      ctx.fillStyle = '#143a63'
+      ctx.font = '22px "Jersey 10", monospace'
       ctx.textBaseline = 'middle'
       MENU_ITEMS.forEach((item, i) => {
-        const itemY = y + MENU_PADDING + i * MENU_ITEM_HEIGHT + MENU_ITEM_HEIGHT / 2
-        ctx.fillText(item.label, START_X + MENU_PADDING + 12, itemY + 1)
+        const itemTop = y + MENU_PADDING + i * MENU_ITEM_HEIGHT
+        const iconY = itemTop + (MENU_ITEM_HEIGHT - MENU_ICON_SIZE) / 2
+        MENU_ICON_DRAWERS[item.href]?.(ctx, START_X + MENU_ICON_LEFT, iconY, MENU_ICON_SIZE)
+      })
+
+      ctx.fillStyle = '#3a3a3a'
+      MENU_ITEMS.forEach((item, i) => {
+        const itemCenterY = y + MENU_PADDING + i * MENU_ITEM_HEIGHT + MENU_ITEM_HEIGHT / 2
+        ctx.fillText(item.label, START_X + MENU_TEXT_LEFT, itemCenterY + 1)
       })
 
       ctx.restore()
@@ -1082,7 +1205,7 @@ export default function CrtScreen() {
       menuTRef.current = from + (to - from) * eased
 
       drawStartMenu(ctx, barY, menuTRef.current, hoveredMenuIndex)
-      drawTaskbar(ctx, widthCss, barY, startOpen, hoveredTaskbarIcon)
+      drawTaskbar(ctx, widthCss, barY, startOpen, hoveredTaskbarIcon, muted, hoveredSound)
 
       const hoveredIndex = TASKBAR_ICONS.findIndex((icon) => icon.key === hoveredTaskbarIcon)
       if (hoveredIndex !== -1) {
@@ -1095,7 +1218,7 @@ export default function CrtScreen() {
 
       ctx.restore()
     },
-    [drawTaskbar, drawStartMenu, startOpen, hoveredMenuIndex, hoveredTaskbarIcon],
+    [drawTaskbar, drawStartMenu, startOpen, hoveredMenuIndex, hoveredTaskbarIcon, muted, hoveredSound],
   )
 
   const draw = useCallback(
@@ -1325,6 +1448,20 @@ export default function CrtScreen() {
               }
             />
           ))}
+          <button
+            type="button"
+            className="taskbar-hit__icon"
+            aria-label={muted ? 'Unmute' : 'Mute'}
+            style={{
+              left: soundHitPos.x - SOUND_ICON_SIZE / 2,
+              top: soundHitPos.y - SOUND_ICON_SIZE / 2,
+              width: SOUND_ICON_SIZE,
+              height: SOUND_ICON_SIZE,
+            }}
+            onClick={() => setMuted((m) => !m)}
+            onMouseEnter={() => setHoveredSound(true)}
+            onMouseLeave={() => setHoveredSound(false)}
+          />
         </div>
       )}
 

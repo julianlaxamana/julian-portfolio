@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import './Window.css'
 
-const TITLEBAR_HEIGHT = 30
+const TITLEBAR_HEIGHT = 34
 const MINIMIZE_TRANSITION = { duration: 0.28, ease: [0.4, 0, 1, 1] as const }
 const CLOSE_TRANSITION = { duration: 0.18, ease: [0.4, 0, 1, 1] as const }
 const OPEN_TRANSITION = { duration: 0.22, ease: [0, 0, 0.2, 1] as const }
@@ -12,10 +12,10 @@ const SNAP_TRANSITION = { duration: 0.24, ease: [0.16, 1, 0.3, 1] as const }
 // in Window.css. Kept in sync manually — used to place click targets that
 // compensate for the CRT warp filter (see getWindowControlCenters below).
 const WINDOW_BORDER_WIDTH = 2
-const CONTROLS_PADDING_RIGHT = 4
-const CONTROLS_GAP = 4
-const BUTTON_WIDTH = 28
-const BUTTON_HEIGHT = 26
+const CONTROLS_PADDING_RIGHT = 5
+const CONTROLS_GAP = 5
+const BUTTON_WIDTH = 32
+const BUTTON_HEIGHT = 30
 
 export type WindowRect = { x: number; y: number; width: number; height: number }
 export type Point = { x: number; y: number }
