@@ -2,6 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type React
 import CrtShaderCanvas from './CrtShaderCanvas'
 import Window, { getWindowControlCenters, WINDOW_BUTTON_SIZE, type Point, type WindowRect } from './Window'
 import DesktopIcon, { type IconPosition } from './DesktopIcon'
+import AboutContent from './AboutContent'
 import './CrtScreen.css'
 
 const FONT_SIZE = 28
@@ -52,7 +53,7 @@ type WindowInstanceState = {
 }
 
 const WINDOW_TITLES: Record<WindowKey, string> = {
-  about: 'About.txt',
+  about: 'About Me',
   projects: 'Projects',
   contact: 'Contact',
 }
@@ -64,9 +65,9 @@ const WINDOW_CONTENT: Record<WindowKey, string> = {
 }
 
 const DEFAULT_WINDOW_RECT: Record<WindowKey, WindowRect> = {
-  about: { x: 90, y: 60, width: 420, height: 260 },
-  projects: { x: 150, y: 110, width: 460, height: 300 },
-  contact: { x: 200, y: 90, width: 380, height: 220 },
+  about: { x: 90, y: 60, width: 500, height: 320 },
+  projects: { x: 150, y: 110, width: 540, height: 360 },
+  contact: { x: 200, y: 90, width: 460, height: 280 },
 }
 
 function createInitialWindowStates(): Record<WindowKey, WindowInstanceState> {
@@ -402,7 +403,7 @@ function ProjectsIconGlyph() {
 }
 
 const DESKTOP_ICON_CONFIG: { key: DesktopIconKey; label: string }[] = [
-  { key: 'about', label: 'About.txt' },
+  { key: 'about', label: 'About Me' },
   { key: 'projects', label: 'Projects' },
 ]
 
@@ -699,6 +700,20 @@ export default function CrtScreen() {
     },
     [focusWindow],
   )
+
+  useEffect(() => {
+    if (screenPhase !== 'desktop') return
+    setWindows((prev) => {
+      const win = prev.about
+      if (win.open && !win.minimized) return prev
+      const x =
+        screenRect.width > 0 ? (screenRect.width - win.rect.width) / 2 : win.rect.x
+      const y =
+        screenRect.height > 0 ? (screenRect.height - win.rect.height) / 2 : win.rect.y
+      return { ...prev, about: { ...win, open: true, minimized: false, rect: { ...win.rect, x, y } } }
+    })
+    focusWindow('about')
+  }, [screenPhase, screenRect.width, screenRect.height, focusWindow])
 
   const closeWindow = useCallback((key: WindowKey) => {
     setWindows((prev) => {
@@ -1186,7 +1201,7 @@ export default function CrtScreen() {
             draw={drawTaskbarLayer}
             bgColor={bgColor}
             strength={strength}
-            className="crt-screen__canvas"
+            className="crt-screen__canvas crt-screen__taskbar-layer"
           />
         )}
 
@@ -1264,7 +1279,7 @@ export default function CrtScreen() {
                 onFocus={() => focusWindow(key)}
                 onRectChange={(rect) => updateWindowRect(key, rect)}
               >
-                <p>{WINDOW_CONTENT[key]}</p>
+                {key === 'about' ? <AboutContent /> : <p>{WINDOW_CONTENT[key]}</p>}
               </Window>
             ))}
           </div>

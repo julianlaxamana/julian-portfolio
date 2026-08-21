@@ -57,6 +57,11 @@
   pointer-events: none;
 }
 
+.crt-screen__taskbar-layer {
+  z-index: 45;
+  pointer-events: none;
+}
+
 .crt-screen__overlay {
   pointer-events: none;
 }
