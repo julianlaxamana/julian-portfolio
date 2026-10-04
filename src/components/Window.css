@@ -24,12 +24,12 @@
   padding: 0 4px 0 6px;
   background: linear-gradient(180deg, #bfe3ff 0%, #8fc9f7 45%, #5aa3e8 100%);
   border-bottom: 1px solid #143a63;
-  cursor: grab;
+  cursor: var(--cursor-grab);
   user-select: none;
 }
 
 .window__titlebar:active {
-  cursor: grabbing;
+  cursor: var(--cursor-grabbing);
 }
 
 .window__titlebar-text {
@@ -74,7 +74,7 @@
   border-right-color: #404040;
   border-bottom-color: #404040;
   color: #000000;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .window__button svg {

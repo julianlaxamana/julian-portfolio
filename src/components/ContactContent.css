@@ -46,7 +46,7 @@
   font-family: 'Jersey 10', monospace;
   font-size: 19px;
   color: #1a1a1a;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .contact-send:hover {

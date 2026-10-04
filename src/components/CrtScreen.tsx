@@ -161,23 +161,25 @@ const BOOT_ASCII_ART = [
 ]
 
 const BOOT_LINES: Line[] = [
-  { text: 'JULIAN-BIOS (C) 2026 J. LAXAMANA SYSTEMS', delayAfter: 200 },
+  { text: 'JULIAN-BIOS (C) 2026 J. LAXAMANA SYSTEMS', delayAfter: 100 },
   { text: 'CPU: PORTFOLIO-CORE @ 3.80GHz' },
   { text: 'Running memory test...' },
-  { text: '655360K OK', delayAfter: 150 },
+  { text: '655360K OK', delayAfter: 80 },
   { text: '' },
   { text: 'Detecting drives...' },
   { text: '  Primary Master  : JULIAN_PORTFOLIO.DRV' },
   { text: '  Primary Slave   : COFFEE.SYS' },
-  { text: '  Secondary Master: NOT DETECTED', delayAfter: 150 },
+  { text: '  Secondary Master: NOT DETECTED', delayAfter: 80 },
   { text: '' },
-  { text: 'Loading PORTFOLIO.EXE ...', delayAfter: 100 },
+  { text: 'Loading PORTFOLIO.EXE ...', delayAfter: 60 },
 ]
 
-const TYPE_SPEED = 14
-const LINE_PAUSE = 60
-const POWER_ON_SWAP_DELAY = 140
-const POWER_ON_DURATION = 640
+const TYPE_SPEED = 12
+const CHARS_PER_STEP = 3
+const LINE_PAUSE = 30
+const PROGRESS_DURATION = 500
+const POWER_ON_SWAP_DELAY = 90
+const POWER_ON_DURATION = 420
 const DESKTOP_STRENGTH = 0.15
 const BOOT_STRENGTH = DESKTOP_STRENGTH
 
@@ -321,6 +323,11 @@ function buildCrtPath(w: number, h: number, aspect: number, strength: number): C
 }
 
 const WARP_MAP_RES = 96
+
+// Firefox rasterizes SVG filters on the CPU, so warping the whole windows
+// layer with feDisplacementMap makes every drag/animation frame stutter.
+// Windows render flat there; the canvas layers still get the curvature.
+const SUPPORTS_FAST_WINDOW_WARP = !/firefox/i.test(navigator.userAgent)
 
 type WarpDisplacementMap = { dataUrl: string; scale: number }
 
@@ -688,6 +695,7 @@ export default function CrtScreen() {
   >([])
   const [hoveredTaskbarIcon, setHoveredTaskbarIcon] = useState<string | null>(null)
   const [muted, setMuted] = useState(false)
+  const [clockText, setClockText] = useState(() => formatTime(new Date()))
   const [hoveredSound, setHoveredSound] = useState(false)
   const [soundHitPos, setSoundHitPos] = useState({ x: 0, y: 0 })
   const [screenRect, setScreenRect] = useState({ width: 0, height: 0, left: 0, top: 0 })
@@ -721,9 +729,17 @@ export default function CrtScreen() {
   }, [screenPhase])
 
   useEffect(() => {
+    if (screenPhase !== 'booting') return
     const interval = setInterval(() => setCursorOn((on) => !on), 500)
     return () => clearInterval(interval)
-  }, [])
+  }, [screenPhase])
+
+  // Only re-renders (and so only redraws the taskbar) when the minute changes.
+  useEffect(() => {
+    if (screenPhase !== 'desktop') return
+    const interval = setInterval(() => setClockText(formatTime(new Date())), 1000)
+    return () => clearInterval(interval)
+  }, [screenPhase])
 
   // Warm the browser cache for images used once the desktop appears (About
   // window photos, school logos) during the boot animation, so they're
@@ -745,7 +761,7 @@ export default function CrtScreen() {
           let i = 0
           const step = () => {
             if (cancelledRef.current) return resolve()
-            i++
+            i = Math.min(line.text.length, i + CHARS_PER_STEP)
             setRenderedLines((prev) => {
               const next = [...prev]
               next[next.length - 1] = line.text.slice(0, i)
@@ -766,7 +782,7 @@ export default function CrtScreen() {
       if (cancelledRef.current) return
 
       const start = Date.now()
-      const duration = 900
+      const duration = PROGRESS_DURATION
       const tick = () => {
         if (cancelledRef.current) return
         const elapsed = Date.now() - start
@@ -1200,6 +1216,7 @@ export default function CrtScreen() {
       hoveredIcon: string | null,
       muted: boolean,
       hoveredSound: boolean,
+      clockText: string,
     ) => {
       const barGradient = ctx.createLinearGradient(0, barY, 0, barY + TASKBAR_HEIGHT)
       barGradient.addColorStop(0, '#bfe3ff')
@@ -1280,7 +1297,7 @@ export default function CrtScreen() {
       ctx.fillStyle = '#000000'
       ctx.font = '20px "Jersey 10", monospace'
       ctx.textAlign = 'center'
-      ctx.fillText(formatTime(new Date()), trayX + TRAY_WIDTH / 2, trayY + TRAY_HEIGHT / 2 + 1)
+      ctx.fillText(clockText, trayX + TRAY_WIDTH / 2, trayY + TRAY_HEIGHT / 2 + 1)
       ctx.textAlign = 'left'
       ctx.textBaseline = 'top'
     },
@@ -1433,7 +1450,7 @@ export default function CrtScreen() {
       menuTRef.current = from + (to - from) * eased
 
       drawStartMenu(ctx, barY, menuTRef.current, hoveredMenuIndex)
-      drawTaskbar(ctx, widthCss, barY, startOpen, hoveredTaskbarIcon, muted, hoveredSound)
+      drawTaskbar(ctx, widthCss, barY, startOpen, hoveredTaskbarIcon, muted, hoveredSound, clockText)
 
       const hoveredIndex = TASKBAR_ICONS.findIndex((icon) => icon.key === hoveredTaskbarIcon)
       if (hoveredIndex !== -1) {
@@ -1445,8 +1462,10 @@ export default function CrtScreen() {
       }
 
       ctx.restore()
+      // Keep rendering until the Start menu slide finishes.
+      return raw < 1
     },
-    [drawTaskbar, drawStartMenu, startOpen, hoveredMenuIndex, hoveredTaskbarIcon, muted, hoveredSound],
+    [drawTaskbar, drawStartMenu, startOpen, hoveredMenuIndex, hoveredTaskbarIcon, muted, hoveredSound, clockText],
   )
 
   const draw = useCallback(
@@ -1473,7 +1492,7 @@ export default function CrtScreen() {
   const pathD = crtGeometry?.d ?? ''
   const windowsWarp = useMemo(
     () =>
-      hasRect && screenPhase === 'desktop'
+      hasRect && screenPhase === 'desktop' && SUPPORTS_FAST_WINDOW_WARP
         ? buildWarpDisplacementMap(
             screenRect.width,
             screenRect.height,
@@ -1518,7 +1537,7 @@ export default function CrtScreen() {
               p.x / screenRect.width,
               p.y / screenRect.height,
               aspect,
-              DESKTOP_STRENGTH,
+              windowsWarp ? DESKTOP_STRENGTH : 0,
             )
             return { x: screenRect.left + wu * screenRect.width, y: screenRect.top + wv * screenRect.height }
           }

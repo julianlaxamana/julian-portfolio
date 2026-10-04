@@ -15,6 +15,11 @@
   --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
   --mono: ui-monospace, Consolas, monospace;
 
+  --cursor-default: url('/cursor-arrow.svg') 1 1, auto;
+  --cursor-pointer: url('/cursor-pointer.svg') 13 2, pointer;
+  --cursor-grab: url('/cursor-grab.svg') 16 16, grab;
+  --cursor-grabbing: url('/cursor-grabbing.svg') 16 16, grabbing;
+
   font: 18px/145% var(--sans);
   letter-spacing: 0.18px;
   color-scheme: light dark;
@@ -61,6 +66,7 @@ body {
   overflow: hidden;
   overscroll-behavior: none;
   background: #000;
+  cursor: var(--cursor-default);
 }
 
 h1,

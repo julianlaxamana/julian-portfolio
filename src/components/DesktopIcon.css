@@ -8,7 +8,7 @@
   align-items: center;
   gap: 6px;
   padding: 8px 4px;
-  cursor: default;
+  cursor: var(--cursor-default);
   touch-action: none;
   user-select: none;
 }

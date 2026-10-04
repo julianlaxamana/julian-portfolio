@@ -5,7 +5,7 @@ export type CrtDrawFn = (
   width: number,
   height: number,
   dpr: number,
-) => void
+) => boolean | void
 
 interface CrtShaderCanvasProps {
   draw: CrtDrawFn
@@ -89,7 +89,13 @@ export default function CrtShaderCanvas({
 }: CrtShaderCanvasProps) {
   const glCanvasRef = useRef<HTMLCanvasElement>(null)
   const drawRef = useRef(draw)
-  drawRef.current = draw
+  const requestFrameRef = useRef<(() => void) | null>(null)
+
+  // A new draw fn means the content changed, so schedule a redraw.
+  useEffect(() => {
+    drawRef.current = draw
+    requestFrameRef.current?.()
+  }, [draw])
 
   useEffect(() => {
     const glCanvas = glCanvasRef.current
@@ -146,17 +152,34 @@ export default function CrtShaderCanvas({
       gl!.uniform2f(uResolution, width, height)
     }
 
-    resize()
-    window.addEventListener('resize', resize)
-
     let raf = 0
     let stopped = false
 
+    // Renders on demand rather than every frame: the 2D redraw + full-size
+    // texture upload is the most expensive thing on the page, and most of the
+    // time the content is static. A draw fn returns true to request another
+    // frame (e.g. while it's animating).
+    function requestFrame() {
+      if (!stopped && !raf) raf = requestAnimationFrame(frame)
+    }
+    requestFrameRef.current = requestFrame
+
+    function onResize() {
+      resize()
+      requestFrame()
+    }
+
+    resize()
+    window.addEventListener('resize', onResize)
+    // Canvas text falls back to a system font until web fonts finish loading.
+    document.fonts?.ready.then(requestFrame)
+
     function frame() {
+      raf = 0
       if (stopped) return
       const dpr = window.devicePixelRatio || 1
       ctx.setTransform(1, 0, 0, 1, 0, 0)
-      drawRef.current(ctx, width, height, dpr)
+      const keepAnimating = drawRef.current(ctx, width, height, dpr)
 
       gl!.bindTexture(gl!.TEXTURE_2D, texture)
       gl!.texImage2D(
@@ -168,15 +191,16 @@ export default function CrtShaderCanvas({
         sourceCanvas,
       )
       gl!.drawArrays(gl!.TRIANGLES, 0, 3)
-      raf = requestAnimationFrame(frame)
+      if (keepAnimating) requestFrame()
     }
 
-    raf = requestAnimationFrame(frame)
+    requestFrame()
 
     return () => {
       stopped = true
       cancelAnimationFrame(raf)
-      window.removeEventListener('resize', resize)
+      requestFrameRef.current = null
+      window.removeEventListener('resize', onResize)
       gl.deleteTexture(texture)
       gl.deleteBuffer(positionBuffer)
       gl.deleteProgram(program)
