@@ -102,7 +102,7 @@ export default function AboutContent({ onOpenProject }: AboutContentProps) {
         <div className="about-heading">
           <h2 className="about-title">Julian Laxamana</h2>
           <p className="about-subtitle">Computer Science @ UCLA</p>
-          <p className="about-subtitle">Building weird little things on the web</p>
+          <p className="about-subtitle">nihilistic penguin is my role model</p>
         </div>
         <div className="about-social">
           <a
