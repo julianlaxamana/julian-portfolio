@@ -62,12 +62,38 @@ export const PROJECTS: Project[] = [
     liveUrl: 'https://joseph-orawiec.itch.io/help-fih',
   },
   {
-    id: 'project-three',
-    fileName: 'project_three.txt',
-    title: 'Project Three',
+    id: 'bruineats',
+    fileName: 'bruineats.exe',
+    title: 'BruinEats',
+    category: 'Web Development',
+    description:
+      "A single-page UCLA dining app with live menus, ratings, and analytics, replacing UCLA's multi-page navigation.",
+    longDescription:
+      "A full-stack dining app for UCLA students (Jan. – Mar. 2026). A React frontend and Node.js backend use Firebase for real-time data, and a Python web scraper keeps menu data up to date automatically. It replaces UCLA's multi-page dining navigation with a single-page interface, a ratings system, and analytics.",
+    tags: ['React', 'Node.js', 'Vite', 'Firebase', 'Python'],
+    image: '',
+  },
+  {
+    id: 'bur-fish-robot',
+    fileName: 'bur_fish_robot.txt',
+    title: 'BUR Fish Robot',
     category: 'Robotics',
-    description: 'Placeholder description — swap this out with a real project once details are ready.',
-    tags: ['Placeholder', 'Tag'],
+    description: 'A bio-inspired robotic fish with simulated swimming gaits, a ROS control pipeline, and YOLO-based navigation.',
+    longDescription:
+      'A robotic fish (Jul. 2026 – present). I simulated swimming gaits in MuJoCo, tuning tail frequency, amplitude, and phase to optimize forward speed before hardware testing. I built a Gazebo simulation with a ROS control pipeline that closes the loop between IMU and depth sensors and servo actuators on a Raspberry Pi, and deployed YOLO object detection on a Jetson for autonomous navigation.',
+    tags: ['ROS', 'Gazebo', 'MuJoCo', 'Python', 'Docker', 'YOLO'],
+    image: '',
+  },
+  {
+    id: 'underwater-rov',
+    fileName: 'underwater_rov.txt',
+    title: 'Underwater ROV',
+    category: 'Robotics',
+    description:
+      'An 8-thruster, 2-arm underwater ROV for MATE ROV 2025. I led the 11-person software subteam.',
+    longDescription:
+      'An underwater ROV built for MATE ROV 2025 (Jan. – Jul. 2025). I led an 11-person software subteam on the control systems and embedded firmware. I derived a 6-DOF kinematic model in MATLAB mapping 8 thruster forces to vehicle motion and implemented the thrust allocation in C++ with Eigen. A PID auto-leveling controller using IMU pitch and roll feedback cut steady-state error from 8° to under 1°. Moving video streaming to UDP sockets cut latency by 70%.',
+    tags: ['C++', 'Python', 'Eigen', 'KiCAD', 'Raspberry Pi', 'MATE ROV'],
     image: '',
   },
 ]
